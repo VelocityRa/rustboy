@@ -4,6 +4,8 @@ extern crate glutin_window;
 extern crate opengl_graphics;
 
 use std::path::Path;
+use std::env;
+
 use piston::event_loop::*;
 use piston::input::*;
 use piston::window::WindowSettings;
@@ -13,13 +15,24 @@ use opengl_graphics::*;
 mod cpu;
 mod gpu;
 mod mmu;
+mod emulator;
+
+const opengl: OpenGL = OpenGL::V3_2;
 
 fn main() {
 
-	let opengl = OpenGL::V3_2;
-	let mut window: Window = 
+	let args: Vec<_> = env::args().collect();
+	let rom_path: &String;
+    if args.len() < 2 {
+        panic!("No arguments provided.
+        		USAGE: rustboy <path/to/rom>");
+    } else {
+    	rom_path = &args[1];
+    }
+
+    let mut window: Window = 
 		WindowSettings::new(
-			"RustBoy Emulator",
+			"Rust Boy Emulator",
 			[640, 480]
 		)
 		.opengl(opengl)
@@ -28,11 +41,22 @@ fn main() {
 		.unwrap();
 
 
-	let mut gl = GlGraphics::new(opengl);
-	let mut events = window.events();
+	let mut emu = emulator::Emulator {
+		gl: GlGraphics::new(opengl),
+		rom_loaded: emulator::try_open_rom(&rom_path),
+	};
 
-	while let Some(e) = events.next(&mut window) {
-		use graphics::*;
+	// Main Event Loop
+	let mut events = window.events();
+	while let Some(evt) = events.next(&mut window) {
+		
+		if let Some(r) = evt.render_args() {
+			emu.render(&r);
+		}
+
+		if let Some(u) = evt.update_args() {
+			emu.update(&u);
+		}
 
 	}
 
