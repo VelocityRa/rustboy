@@ -8,8 +8,8 @@ use std::io;
 use std::path::Path;
 
 pub struct Emulator {
-	pub gl: GlGraphics,	// OpenGL drawing backend.
-	pub rom_loaded: Vec<u8>,
+	pub gl: GlGraphics,			// OpenGL drawing backend
+	pub rom_loaded: Vec<u8>,	// Rom in heap
 }
 
 impl Emulator {
@@ -35,7 +35,7 @@ fn open_rom<P: AsRef<Path>>(rom_path: P) -> io::Result< Vec<u8> > {
 	let mut rom_buffer: Vec<u8> = Vec::new();
 
 	// Read the data
-	let bytes_read: usize = try!(rom_file.read_to_end(&mut rom_buffer));
+	let bytes_read = try!(rom_file.read_to_end(&mut rom_buffer));
 
 	// no panic! issued so we're good
 	return Ok(rom_buffer);

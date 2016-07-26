@@ -17,7 +17,7 @@ mod gpu;
 mod mmu;
 mod emulator;
 
-const opengl: OpenGL = OpenGL::V3_2;
+const OPENGL: OpenGL = OpenGL::V3_2;
 
 fn main() {
 
@@ -35,14 +35,14 @@ fn main() {
 			"Rust Boy Emulator",
 			[640, 480]
 		)
-		.opengl(opengl)
+		.opengl(OPENGL)
 		.exit_on_esc(true)
 		.build()
 		.unwrap();
 
 
 	let mut emu = emulator::Emulator {
-		gl: GlGraphics::new(opengl),
+		gl: GlGraphics::new(OPENGL),
 		rom_loaded: emulator::try_open_rom(&rom_path),
 	};
 
