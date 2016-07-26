@@ -1,3 +1,7 @@
 
 target/
 roms/
+
+# Sublime Text stuff
+*.sublime-workspace
+*.sublime-project
