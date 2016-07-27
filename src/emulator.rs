@@ -16,6 +16,7 @@ pub struct Emulator {
 	pub mem: Memory,
 	pub gl: GlGraphics,			// OpenGL drawing backend
 	pub rom_loaded: Vec<u8>,	// Rom in heap
+	pub rom_header: CartridgeHeader,
 }
 
 impl Emulator {
@@ -31,37 +32,7 @@ impl Emulator {
 	}
 
 	pub fn read_header(&mut self) {
-
-		use std::mem;
-		use std::slice;
-		use std::io::Read;
-
-		const HEADER_SIZE: usize = 0x50;
-		const HEADER_OFFSET: usize = 0x100;
-
-		let mut buffer: [u8; HEADER_SIZE] = [0u8; HEADER_SIZE];
-
-		for i in 0..HEADER_SIZE {
-			buffer[i] = self.rom_loaded[i + HEADER_OFFSET];
-		}
-
-		let mut buffer_slice: &[u8] = &buffer;
-
-	    let mut header: CartridgeHeader = Default::default();
-
-	    unsafe {
-	        let header_slice = slice::from_raw_parts_mut(
-	            &mut header as *mut _ as *mut u8,
-	            HEADER_SIZE
-	        );
-	        
-	    	// `read_exact()` comes from `Read` impl for `&[u8]`
-	    	buffer_slice.read_exact(header_slice).unwrap();
-    	}
-
-		println!("Read header: {:#?}", header);
-		
-		let mut header: CartridgeHeader = Default::default();
+		self.rom_header = read_header_impl(&self);
 	}
 }
 
@@ -98,6 +69,39 @@ pub fn try_open_rom<P: AsRef<Path>>(rom_path: P) -> Vec<u8> {
 	};
 }
 
+fn read_header_impl(emu: &Emulator) -> CartridgeHeader {
+
+	use std::mem;
+	use std::slice;
+	use std::io::Read;
+
+	const HEADER_SIZE: usize = 0x50;
+	const HEADER_OFFSET: usize = 0x100;
+
+	let mut buffer: [u8; HEADER_SIZE] = [0u8; HEADER_SIZE];
+
+	for i in 0..HEADER_SIZE {
+		buffer[i] = emu.rom_loaded[i + HEADER_OFFSET];
+	}
+
+	let mut buffer_slice: &[u8] = &buffer;
+
+    let mut header: CartridgeHeader = Default::default();
+
+    unsafe {
+        let header_slice = slice::from_raw_parts_mut(
+            &mut header as *mut _ as *mut u8,
+            HEADER_SIZE
+        );
+        
+    	// `read_exact()` comes from `Read` impl for `&[u8]`
+    	buffer_slice.read_exact(header_slice).unwrap();
+	}
+
+	println!("Read header: {:#?}", header);
+	header
+}
+
 #[derive(Default)]
 #[repr(C, packed)]
 pub struct CartridgeHeader {
@@ -105,12 +109,13 @@ pub struct CartridgeHeader {
 	entry_point: [u16; 2],
 
 	// Bitmap of the Nintendo logo
-	// Use u16 so that we can use the default Debug trait
+	// Use u16 so that we can use the default Default trait
+	// TODO: Don't be lazy and implement our own Default trait
 	nintendo_logo: [u16; 24],
 
 	// Game title in upper case ASCII
-	game_title: [u8; 16],
-	//manufacturer_code: [u8; 4],
+	game_title: [u8; 12],
+	manufacturer_code: [u8; 4],
 		
 	//80h - Game supports CGB functions, but works on old gameboys also.
 	//C0h - Game works on CGB only (physically the same as 80h).
@@ -163,7 +168,7 @@ impl fmt::Debug for CartridgeHeader {
         	cartridge_type: {}
         	rom_size: {}
         	dest_code: {}
-			header_checksum: {:X}
+        	header_checksum: {:X}
         	global_checksum: {:X}
         }}",
         	self.entry_point[0], self.entry_point[1],

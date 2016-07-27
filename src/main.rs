@@ -50,6 +50,7 @@ fn main() {
 		mem: Memory::new(),
 		gl: GlGraphics::new(OPENGL),
 		rom_loaded: emulator::try_open_rom(&rom_path),
+		rom_header: Default::default(),
 	};
 
 	emu.read_header();
