@@ -21,10 +21,16 @@
 
 const MEM_SIZE: usize = 0xFFFF;
 
-fn init_memory() {
+pub struct Memory {
+	raw_mem: [u8; MEM_SIZE],
+}
 
+impl Memory {
 	// Allocate a 64k byte array and zero initialize it
 	// This is all the system's RAM
-	let mut memory = [0u8; MEM_SIZE];
-
+	pub fn new() -> Memory {
+		Memory {
+			raw_mem: [0u8; MEM_SIZE],
+		}
+	}
 }

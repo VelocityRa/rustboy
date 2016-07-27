@@ -74,6 +74,7 @@ pub struct Flags {
 	unused1: bool,	// Unused (always 0)
 	unused2: bool,	// Unused (always 0)
 	unused3: bool,	// Unused (always 0)
+	unused4: bool,	// Unused (always 0)
 }
 
 pub struct Cpu {
@@ -86,6 +87,22 @@ impl Cpu {
 			regs: Default::default(),
 		}
 	}
+
+	// Power Up Sequence
+	pub fn reset_state(&mut self) {
+
+		self.regs.a = 0x01;
+		self.regs.flags.zf.set();
+		self.regs.flags.h.set();
+		self.regs.flags.cy.set();
+		self.regs.bc.set_both(0x0013);
+		self.regs.de.set_both(0x00D8);
+		self.regs.hl.set_both(0x014D);
+		self.regs.sp.set_both(0xFFFE);
+		
+	}
+
+
 	pub fn get_regs_mut(&mut self) -> &mut Registers {
 		&mut self.regs
 	}
@@ -93,6 +110,13 @@ impl Cpu {
 		&mut self.regs.flags
 	}
 }
+
+
+
+
+//	======================================
+//	|               TESTS                |
+//	======================================
 
 #[cfg(test)]
 mod cpu_tests {
