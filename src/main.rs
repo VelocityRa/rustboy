@@ -1,15 +1,14 @@
-
 extern crate piston;
 extern crate graphics;
 extern crate glutin_window;
 extern crate opengl_graphics;
 
-use std::path::Path;
 use std::env;
 
 use piston::event_loop::*;
 use piston::input::*;
 use piston::window::WindowSettings;
+use piston::window::AdvancedWindow;
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::*;
 
@@ -22,6 +21,7 @@ use cpu::Cpu;
 use mmu::Memory;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
+static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
 fn main() {
 
@@ -36,7 +36,7 @@ fn main() {
     
     let mut window: Window = 
 		WindowSettings::new(
-			"Rust Boy Emulator",
+			WINDOW_TITLE,
 			[640, 480]
 		)
 		.opengl(OPENGL)
@@ -55,18 +55,20 @@ fn main() {
 
 	emu.read_header();
 
+	window.set_title(
+		format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
+		);
+
 	// Main Event Loop
-	let mut events = window.events();
-	while let Some(evt) = events.next(&mut window) {
-		
-		if let Some(r) = evt.render_args() {
-			emu.render(&r);
-		}
+	// let mut events = window.events();
+	// while let Some(evt) = events.next(&mut window) {
+	// 	if let Some(r) = evt.render_args() {
+	// 		emu.render(&r);
+	// 	}
 
-		if let Some(u) = evt.update_args() {
-			emu.update(&u);
-		}
-
-	}
+	// 	if let Some(u) = evt.update_args() {
+	// 		emu.update(&u);
+	// 	}
+	// }
 
 }

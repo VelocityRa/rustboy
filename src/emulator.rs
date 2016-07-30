@@ -11,6 +11,7 @@ use std::path::Path;
 use cpu::Cpu;
 use mmu::Memory;
 
+
 pub struct Emulator {
 	pub cpu: Cpu,
 	pub mem: Memory,
@@ -59,19 +60,17 @@ pub fn try_open_rom<P: AsRef<Path>>(rom_path: P) -> Vec<u8> {
 
 	// Call open_rom and handle Result
 	match open_rom(&rom_path) {
-        Err(why) => 
-        	panic!("Couldn't open rom {}: {}", rom_display,
-                                                   why.description()),
+		Err(why) => 
+			panic!("Couldn't open rom {}: {}", rom_display,
+				why.description()),
 		Ok(data) => {
 			println!("Read {} bytes from ROM: {}.", data.len(), rom_display);
-			return data
+			data
 		},
-	};
+	}
 }
 
 fn read_header_impl(emu: &Emulator) -> CartridgeHeader {
-
-	use std::mem;
 	use std::slice;
 	use std::io::Read;
 
@@ -102,6 +101,18 @@ fn read_header_impl(emu: &Emulator) -> CartridgeHeader {
 	header
 }
 
+impl CartridgeHeader {
+	pub fn get_game_title(&self) -> String {
+		use std::str;
+
+		String::from(
+			str::from_utf8(
+				&self.game_title
+			).unwrap()
+		)
+	}
+}
+
 #[derive(Default)]
 #[repr(C, packed)]
 pub struct CartridgeHeader {
@@ -114,9 +125,9 @@ pub struct CartridgeHeader {
 	nintendo_logo: [u16; 24],
 
 	// Game title in upper case ASCII
-	game_title: [u8; 12],
-	manufacturer_code: [u8; 4],
-		
+	game_title: [u8; 16],
+	//manufacturer_code: [u8; 4],
+
 	//80h - Game supports CGB functions, but works on old gameboys also.
 	//C0h - Game works on CGB only (physically the same as 80h).
 	//cgb_flag: u8,
@@ -159,24 +170,22 @@ pub struct CartridgeHeader {
 
 impl fmt::Debug for CartridgeHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	use std::str;
-
         write!(f, "CartridgeHeader {{
-        	entry_point: {:X} {:X}
+        	entry_point: {:04X} {:04X}
         	game_title: {:?}
         	sgb_flag: {}
         	cartridge_type: {}
         	rom_size: {}
-        	dest_code: {}
-        	header_checksum: {:X}
-        	global_checksum: {:X}
+        	dest_code: {}{}
+        	header_checksum: {:04X}
+        	global_checksum: {:04X}
         }}",
         	self.entry_point[0], self.entry_point[1],
-        	str::from_utf8(&self.game_title).unwrap(),
+        	self.get_game_title(),
         	self.sgb_flag,
         	self.cartridge_type,
         	self.rom_size,
-        	self.dest_code,
+        	if self.dest_code == 0 {""} else {"Non-"}, "Japanese",
         	self.header_checksum,
         	self.global_checksum
         	)
@@ -190,6 +199,7 @@ mod emu_tests {
 	#[test]
 	fn header_size() {
 		use std::mem;
-		assert_eq!(0x0150-0x0100, mem::size_of::<CartridgeHeader>());
+		
+		assert_eq!(0x50, mem::size_of::<CartridgeHeader>());
 	}
 }
