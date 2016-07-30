@@ -19,6 +19,8 @@
 
 */
 
+#![allow(dead_code)]
+
 const MEM_SIZE: usize = 0xFFFF;
 
 pub struct Memory {
@@ -32,5 +34,52 @@ impl Memory {
 		Memory {
 			raw_mem: [0u8; MEM_SIZE],
 		}
+	}
+
+	pub fn read_byte(&self, addr: usize) -> u8 {
+		assert!(addr <= 0xFFFF,
+		 "Invalid memory read: {:04X}", addr);
+
+		self.raw_mem[addr]
+	}
+	pub fn read_word(&self, addr: usize) -> u16 {
+		assert!(addr <= 0xFFFF - 1,
+		 "Invalid memory read: {:04X}", addr);
+
+		(self.raw_mem[addr] as u16) << 8 |
+		(self.raw_mem[addr + 1] as u16)
+	}
+
+	pub fn write_byte(&mut self, addr: usize, data: u8) {
+		assert!(addr <= 0xFFFF,
+		 "Invalid memory write: {:04X}", addr);
+
+		self.raw_mem[addr] = data
+	}
+
+	pub fn write_word(&mut self, addr: usize, data: u16) {
+		assert!(addr <= 0xFFFF - 1,
+		 "Invalid memory write: {:04X}", addr);
+
+		self.raw_mem[addr] = (data >> 8) as u8;
+		self.raw_mem[addr + 1] = (data & 0x00FF) as u8;
+	}
+}
+
+#[cfg(test)]
+mod mem_tests {
+	use super::*;
+
+	#[test]
+	fn mem_read_and_write() {
+		let mut mem: Memory = Memory::new();
+
+		mem.write_byte(0x0004, 0x12);
+		mem.write_byte(0x0005, 0x34);
+		assert_eq!(mem.read_word(0x0004), 0x1234);
+
+		mem.write_word(0x0006, 0x5678);
+		assert_eq!(mem.read_byte(0x0006), 0x56);
+		assert_eq!(mem.read_byte(0x0007), 0x78);
 	}
 }
