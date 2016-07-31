@@ -30,10 +30,11 @@ impl Emulator {
 	// Update state
 	// Gets called once a frame
 	pub fn update(&mut self, args: &UpdateArgs) {
-		self.update_cpu_timers(args.dt);
-
 		// Runs for a frame (~70k clock cycles)
 		self.cpu.run(&mut self.mem);
+
+		self.update_cpu_timers(args.dt);
+
 	}
 
 	pub fn read_header(&mut self) {

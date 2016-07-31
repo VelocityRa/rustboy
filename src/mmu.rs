@@ -36,30 +36,34 @@ impl Memory {
 		}
 	}
 
-	pub fn read_byte(&self, addr: usize) -> u8 {
+	pub fn read_byte(&self, addr: u16) -> u8 {
 		assert!(addr <= 0xFFFF,
 		 "Invalid memory read: {:04X}", addr);
+		let addr: usize = addr as usize;
 
 		self.raw_mem[addr]
 	}
-	pub fn read_word(&self, addr: usize) -> u16 {
+	pub fn read_word(&self, addr: u16) -> u16 {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory read: {:04X}", addr);
+		let addr: usize = addr as usize;
 
 		(self.raw_mem[addr] as u16) << 8 |
 		(self.raw_mem[addr + 1] as u16)
 	}
 
-	pub fn write_byte(&mut self, addr: usize, data: u8) {
+	pub fn write_byte(&mut self, addr: u16, data: u8) {
 		assert!(addr <= 0xFFFF,
 		 "Invalid memory write: {:04X}", addr);
+		let addr: usize = addr as usize;
 
 		self.raw_mem[addr] = data
 	}
 
-	pub fn write_word(&mut self, addr: usize, data: u16) {
+	pub fn write_word(&mut self, addr: u16, data: u16) {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory write: {:04X}", addr);
+		let addr: usize = addr as usize;
 
 		self.raw_mem[addr] = (data >> 8) as u8;
 		self.raw_mem[addr + 1] = (data & 0x00FF) as u8;

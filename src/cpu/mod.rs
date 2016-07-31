@@ -4,6 +4,10 @@
 
 #![allow(dead_code)]
 
+pub use self::opcodes::opcode_map;
+pub mod opcodes;
+pub mod instructions;
+
 use mmu::Memory;
 use emulator::Emulator;
 
@@ -39,8 +43,8 @@ pub struct Registers {
 	bc: Register,		// BC: General purpose
 	de: Register,		// DE: General purpose
 	hl: Register,		// HL: General purpose
-	sp: Register,		// SP: Stack pointer
-	pc: Register,		// PC: Program counter
+	sp: u16	,			// SP: Stack pointer
+	pc: u16,			// PC: Program counter
 }
 
 
@@ -111,7 +115,6 @@ impl Cpu {
 
 	// Power Up Sequence
 	pub fn reset_state(&mut self) {
-
 		self.regs.a = 0x01;
 		self.regs.flags.zf.set();
 		self.regs.flags.h.set();
@@ -119,9 +122,8 @@ impl Cpu {
 		self.regs.bc.set_both(0x0013);
 		self.regs.de.set_both(0x00D8);
 		self.regs.hl.set_both(0x014D);
-		self.regs.sp.set_both(0xFFFE);
-		self.regs.pc.set_both(0x0000);
-		
+		self.regs.sp = 0xFFFE;
+		self.regs.pc = 0x0000;		
 	}
 
 	pub fn get_regs_mut(&mut self) -> &mut Registers {
@@ -158,22 +160,23 @@ impl Cpu {
 	}
 
 	// Dispatcher
-	pub fn run(&mut self, emu: &mut Memory) {
+	pub fn run(&mut self, mem: &mut Memory) {
 		
 		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
-			//let op = emu.;
+			let op: u8 = mem.read_byte(self.regs.pc);
+			
+			if op != 0 { println!("{:02X}: {:02X}", self.regs.pc, op)};
+			
+			opcode_map[op as usize](self);
+
 			self.total_cycles += 4;
+			self.regs.pc += 4;
+
 		}
 
 		self.total_cycles = SCREEN_REFRESH_INTERVAL;
 	}
 }
-
-//	======================================
-//	|            INSTRUCTIONS            |
-//	======================================
-
-
 
 //	======================================
 //	|               TESTS                |
