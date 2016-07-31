@@ -20,6 +20,7 @@ mod gpu;
 mod mmu;
 mod emulator;
 
+
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
@@ -28,13 +29,13 @@ fn main() {
 	let args: Vec<_> = env::args().collect();
 	let rom_path: &String;
 
-    match args.len() {
-    	2 => rom_path = &args[1],
-    	_ => panic!("No arguments provided.
-        		USAGE: rustboy <path/to/rom>"),
+	match args.len() {
+		2 => rom_path = &args[1],
+		_ => panic!("No arguments provided.
+				USAGE: rustboy <path/to/rom>"),
 	}
-    
-    let mut window: Window = 
+
+	let mut window: Window = 
 		WindowSettings::new(
 			WINDOW_TITLE,
 			[640, 480]
@@ -60,16 +61,15 @@ fn main() {
 		);
 
 	// Main Event Loop
-	// let mut events = window.events();
-	// while let Some(evt) = events.next(&mut window) {
-	// 	if let Some(r) = evt.render_args() {
-	// 		emu.render(&r);
-	// 	}
+	let mut events = window.events().max_fps(60).ups(60);
+	while let Some(evt) = events.next(&mut window) {
+		if let Some(r) = evt.render_args() {
+			emu.render(&r);
+		}
 
-	// 	if let Some(u) = evt.update_args() {
-	// 		emu.update(&u);
-	// 	}
-
-	// }
+		if let Some(u) = evt.update_args() {
+			emu.update(&u);
+		}
+	}
 
 }

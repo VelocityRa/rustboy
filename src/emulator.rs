@@ -24,16 +24,24 @@ impl Emulator {
 
 	// Render screen
 	pub fn render(&mut self, args: &RenderArgs) {
-		use graphics::*;
+		//use graphics::*;
 	}
 
 	// Update state
+	// Gets called once a frame
 	pub fn update(&mut self, args: &UpdateArgs) {
+		self.update_cpu_timers(args.dt);
 
+		// Runs for a frame (~70k clock cycles)
+		self.cpu.run(&mut self.mem);
 	}
 
 	pub fn read_header(&mut self) {
 		self.rom_header = read_header_impl(&self);
+	}
+
+	pub fn update_cpu_timers(&mut self, dt: f64) {
+		self.cpu.update_timers(dt, &mut self.mem);
 	}
 }
 
@@ -171,7 +179,7 @@ pub struct CartridgeHeader {
 impl fmt::Debug for CartridgeHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "CartridgeHeader {{
-        	entry_point: {:04X} {:04X}
+        	entry_point: {:04X}{:04X}
         	game_title: {:?}
         	sgb_flag: {}
         	cartridge_type: {}
@@ -191,6 +199,10 @@ impl fmt::Debug for CartridgeHeader {
         	)
     }
 }
+
+//	======================================
+//	|               TESTS                |
+//	======================================
 
 #[cfg(test)]
 mod emu_tests {

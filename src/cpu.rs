@@ -4,6 +4,9 @@
 
 #![allow(dead_code)]
 
+use mmu::Memory;
+use emulator::Emulator;
+
 // CPU Clock speed
 pub const CLOCK_SPEED: f64 = 4.194304; // MHz
 
@@ -29,7 +32,7 @@ impl Register {
 }
 
 // Z80 registers
-#[derive(Default)]	// same as above
+#[derive(Default)]
 pub struct Registers {
 	a: u8,			// A: Accumulator
 	flags: Flags,	// Flags
@@ -77,15 +80,33 @@ pub struct Flags {
 	unused4: bool,	// Unused (always 0)
 }
 
+#[derive(Default)]
+pub struct Timers {
+	// This register is incremented at rate of 16384Hz
+	// Writing any value to this register resets it to 00h
+	div_reg: u8,
+
+	// This timer is incremented by a clock frequency specified by the TAC register ($FF07)
+	// When the value overflows (gets bigger than FFh) then it will be reset to the 
+	// value specified in TMA (FF06), and an interrupt will be requested
+	counter: u8,
+}
+
 pub struct Cpu {
 	regs: Registers,
+	timers: Timers,
+	total_cycles: u32,
 }
 
 impl Cpu {
 	pub fn new() -> Cpu {
-		Cpu {
+		let mut cpu: Cpu = Cpu {
 			regs: Default::default(),
-		}
+			timers: Default::default(),
+			total_cycles: 0,
+		};
+		cpu.reset_state();
+		cpu
 	}
 
 	// Power Up Sequence
@@ -99,9 +120,9 @@ impl Cpu {
 		self.regs.de.set_both(0x00D8);
 		self.regs.hl.set_both(0x014D);
 		self.regs.sp.set_both(0xFFFE);
+		self.regs.pc.set_both(0x0000);
 		
 	}
-
 
 	pub fn get_regs_mut(&mut self) -> &mut Registers {
 		&mut self.regs
@@ -109,8 +130,48 @@ impl Cpu {
 	pub fn get_flags_mut(&mut self) -> &mut Flags {
 		&mut self.regs.flags
 	}
+
+	pub fn update_timers(&mut self, dt: f64, mem: &mut Memory) {
+		use std::i32;
+
+		// This register is incremented at rate of 16384Hz
+		self.timers.div_reg = 
+			self.timers.div_reg.wrapping_add(
+				((dt * 16384.0) as u64 % 256) as u8
+			);
+
+		// TODO: Load correct incrementation rate
+		let (new_counter, counter_overflowed) = 
+			self.timers.counter.overflowing_add(
+				((dt * 16384.0) as u64 % 256) as u8
+			);
+
+		self.timers.counter = new_counter;
+		if counter_overflowed {
+			// Read value from TMA - Timer Modulo
+			self.timers.counter = mem.read_byte(0xFF06); 
+		}
+
+		//println!("d:{:02X} \t c:{:02X}", self.timers.div_reg, self.timers.counter);
+		mem.write_byte(0xFF04, self.timers.div_reg);
+		mem.write_byte(0xFF05, self.timers.counter);
+	}
+
+	// Dispatcher
+	pub fn run(&mut self, emu: &mut Memory) {
+		
+		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
+			//let op = emu.;
+			self.total_cycles += 4;
+		}
+
+		self.total_cycles = SCREEN_REFRESH_INTERVAL;
+	}
 }
 
+//	======================================
+//	|            INSTRUCTIONS            |
+//	======================================
 
 
 
