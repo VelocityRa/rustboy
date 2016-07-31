@@ -12,13 +12,13 @@ use piston::window::AdvancedWindow;
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::*;
 
+use cpu::Cpu;
+use mmu::Memory;
+
 mod cpu;
 mod gpu;
 mod mmu;
 mod emulator;
-
-use cpu::Cpu;
-use mmu::Memory;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
@@ -69,6 +69,7 @@ fn main() {
 	// 	if let Some(u) = evt.update_args() {
 	// 		emu.update(&u);
 	// 	}
+
 	// }
 
 }

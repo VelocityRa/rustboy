@@ -199,7 +199,7 @@ mod emu_tests {
 	#[test]
 	fn header_size() {
 		use std::mem;
-		
+
 		assert_eq!(0x50, mem::size_of::<CartridgeHeader>());
 	}
 }
