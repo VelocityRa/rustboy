@@ -47,6 +47,8 @@ impl Memory {
 		self.rom_loaded = rom;
 	}
 
+	// Private members
+
 	fn read_byte_raw(&self, addr: u16) -> u8 {
 		let addr: usize = (addr as usize) - START_MAPPED_MEM;
 		assert!(addr <= MEM_SIZE,
@@ -80,6 +82,8 @@ impl Memory {
 		self.raw_mem[addr] = (data >> 8) as u8;
 		self.raw_mem[addr + 1] = (data & 0x00FF) as u8;
 	}
+
+	// Public members
 
 	pub fn read_byte(&self, addr: u16) -> u8 {
 		self.debug_print_addr(addr, true);
@@ -146,12 +150,12 @@ mod mem_tests {
 	fn mem_read_and_write() {
 		let mut mem: Memory = Memory::new();
 
-		mem.write_byte(0x0004, 0x12);
-		mem.write_byte(0x0005, 0x34);
-		assert_eq!(mem.read_word(0x0004), 0x1234);
+		mem.write_byte_raw(0x8004, 0x12);
+		mem.write_byte_raw(0x8005, 0x34);
+		assert_eq!(mem.read_word_raw(0x8004), 0x1234);
 
-		mem.write_word(0x0006, 0x5678);
-		assert_eq!(mem.read_byte(0x0006), 0x56);
-		assert_eq!(mem.read_byte(0x0007), 0x78);
+		mem.write_word_raw(0x8006, 0x5678);
+		assert_eq!(mem.read_byte_raw(0x8006), 0x56);
+		assert_eq!(mem.read_byte_raw(0x8007), 0x78);
 	}
 }

@@ -200,12 +200,13 @@ mod cpu_tests {
 		// Get mutable reference
 		let mut regs = cpu.get_regs_mut();
 
-		assert_eq!(regs.pc.get_both(), 0);
+		assert_eq!(regs.pc, 0x0150);
 
-		regs.sp.set_both(123);
-		assert_eq!(regs.sp.get_both(), 123);
+		regs.sp = 123;
+		assert_eq!(regs.sp, 123);
 
 		regs.hl.high = 3;
+		regs.hl.low = 0;
 		assert_eq!(regs.hl.high, 3);
 		assert_eq!(regs.hl.get_both(), 0b00000011_00000000);
 	}
@@ -218,7 +219,9 @@ mod cpu_tests {
 		let mut flags = cpu.get_flags_mut();
 
 		flags.zf.set();
+		flags.n.unset();
 		flags.h.set();
+		flags.cy.unset();
 		
 		assert_eq!(flags.zf.get(), 	true);
 		assert_eq!(flags.n.get(), 	false);
