@@ -37,12 +37,11 @@ impl Memory {
 	}
 
 	pub fn read_byte(&self, addr: u16) -> u8 {
-		assert!(addr <= 0xFFFF,
-		 "Invalid memory read: {:04X}", addr);
 		let addr: usize = addr as usize;
 
 		self.raw_mem[addr]
 	}
+	
 	pub fn read_word(&self, addr: u16) -> u16 {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory read: {:04X}", addr);
@@ -53,8 +52,6 @@ impl Memory {
 	}
 
 	pub fn write_byte(&mut self, addr: u16, data: u8) {
-		assert!(addr <= 0xFFFF,
-		 "Invalid memory write: {:04X}", addr);
 		let addr: usize = addr as usize;
 
 		self.raw_mem[addr] = data

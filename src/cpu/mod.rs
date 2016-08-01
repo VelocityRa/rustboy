@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-pub use self::opcodes::opcode_map;
+pub use self::opcodes::OPCODE_MAP;
 pub mod opcodes;
 pub mod instructions;
 
@@ -38,12 +38,12 @@ impl Register {
 // Z80 registers
 #[derive(Default)]
 pub struct Registers {
-	a: u8,			// A: Accumulator
-	flags: Flags,	// Flags
+	a: u8,				// A: Accumulator
+	flags: Flags,		// Flags
 	bc: Register,		// BC: General purpose
 	de: Register,		// DE: General purpose
 	hl: Register,		// HL: General purpose
-	sp: u16	,			// SP: Stack pointer
+	sp: u16,			// SP: Stack pointer
 	pc: u16,			// PC: Program counter
 }
 
@@ -126,6 +126,12 @@ impl Cpu {
 		self.regs.pc = 0x0000;		
 	}
 
+	pub fn get_regs(&self) -> &Registers {
+		&self.regs
+	}
+	pub fn get_flags(&self) -> &Flags {
+		&self.regs.flags
+	}
 	pub fn get_regs_mut(&mut self) -> &mut Registers {
 		&mut self.regs
 	}
@@ -133,9 +139,8 @@ impl Cpu {
 		&mut self.regs.flags
 	}
 
-	pub fn update_timers(&mut self, dt: f64, mem: &mut Memory) {
-		use std::i32;
 
+	pub fn update_timers(&mut self, dt: f64, mem: &mut Memory) {
 		// This register is incremented at rate of 16384Hz
 		self.timers.div_reg = 
 			self.timers.div_reg.wrapping_add(
@@ -154,26 +159,27 @@ impl Cpu {
 			self.timers.counter = mem.read_byte(0xFF06); 
 		}
 
-		//println!("d:{:02X} \t c:{:02X}", self.timers.div_reg, self.timers.counter);
+		//println!("d:{:02X} \t c:{:02X}",  self.timers.div_reg, self.timers.counter);  Memory-map the timers
 		mem.write_byte(0xFF04, self.timers.div_reg);
 		mem.write_byte(0xFF05, self.timers.counter);
 	}
 
 	// Dispatcher
 	pub fn run(&mut self, mem: &mut Memory) {
-		
 		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
 			let op: u8 = mem.read_byte(self.regs.pc);
 			
 			if op != 0 { println!("{:02X}: {:02X}", self.regs.pc, op)};
 			
-			opcode_map[op as usize](self);
+			OPCODE_MAP[op as usize](self);
 
 			self.total_cycles += 4;
 			self.regs.pc += 4;
 
 		}
 
+		// Should this get reset or should we modulo above
+		// Not sure yet...
 		self.total_cycles = SCREEN_REFRESH_INTERVAL;
 	}
 }

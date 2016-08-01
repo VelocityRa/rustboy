@@ -18,6 +18,7 @@ pub struct Emulator {
 	pub gl: GlGraphics,			// OpenGL drawing backend
 	pub rom_loaded: Vec<u8>,	// Rom in heap
 	pub rom_header: CartridgeHeader,
+	pub is_running: bool,
 }
 
 impl Emulator {

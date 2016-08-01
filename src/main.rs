@@ -45,13 +45,13 @@ fn main() {
 		.build()
 		.unwrap();
 
-
 	let mut emu = emulator::Emulator {
 		cpu: Cpu::new(),
 		mem: Memory::new(),
 		gl: GlGraphics::new(OPENGL),
 		rom_loaded: emulator::try_open_rom(&rom_path),
 		rom_header: Default::default(),
+		is_running: true,
 	};
 
 	emu.read_header();
@@ -62,7 +62,7 @@ fn main() {
 
 	// Main Event Loop
 	let mut events = window.events().max_fps(60).ups(60);
-	while let Some(evt) = events.next(&mut window) {
+	'main_loop: while let Some(evt) = events.next(&mut window) {
 		if let Some(r) = evt.render_args() {
 			emu.render(&r);
 		}

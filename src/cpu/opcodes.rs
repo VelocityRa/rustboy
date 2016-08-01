@@ -2,7 +2,7 @@
 use cpu;
 use cpu::Cpu;
 
-pub const opcode_map: [fn(&mut Cpu) -> (); 256] = [
+pub const OPCODE_MAP: [fn(&mut Cpu) -> (); 256] = [
 	Cpu::nop,
 	Cpu::nop,
 	Cpu::nop,
