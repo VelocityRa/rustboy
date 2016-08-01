@@ -11,17 +11,31 @@ use std::path::Path;
 use cpu::Cpu;
 use mmu::Memory;
 
+const OPENGL: OpenGL = OpenGL::V3_2;
 
 pub struct Emulator {
 	pub cpu: Cpu,
 	pub mem: Memory,
 	pub gl: GlGraphics,			// OpenGL drawing backend
-	pub rom_loaded: Vec<u8>,	// Rom in heap
 	pub rom_header: CartridgeHeader,
 	pub is_running: bool,
 }
 
 impl Emulator {
+	pub fn new(rom_path: &String) -> Emulator {
+		let mut emu = Emulator {
+			cpu: Cpu::new(),
+			mem: Memory::new(),
+			gl: GlGraphics::new(OPENGL),
+			rom_header: Default::default(),
+			is_running: true,
+		};
+
+		// Read rom and move ownership to memory component
+		emu.mem.set_rom(try_open_rom(&rom_path));
+		
+		emu
+	}
 
 	// Render screen
 	pub fn render(&mut self, args: &RenderArgs) {
@@ -90,7 +104,7 @@ fn read_header_impl(emu: &Emulator) -> CartridgeHeader {
 	let mut buffer: [u8; HEADER_SIZE] = [0u8; HEADER_SIZE];
 
 	for i in 0..HEADER_SIZE {
-		buffer[i] = emu.rom_loaded[i + HEADER_OFFSET];
+		buffer[i] = emu.mem.rom_loaded[i + HEADER_OFFSET];
 	}
 
 	let mut buffer_slice: &[u8] = &buffer;

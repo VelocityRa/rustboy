@@ -123,7 +123,7 @@ impl Cpu {
 		self.regs.de.set_both(0x00D8);
 		self.regs.hl.set_both(0x014D);
 		self.regs.sp = 0xFFFE;
-		self.regs.pc = 0x0000;		
+		self.regs.pc = 0x0150;
 	}
 
 	pub fn get_regs(&self) -> &Registers {
@@ -169,12 +169,13 @@ impl Cpu {
 		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
 			let op: u8 = mem.read_byte(self.regs.pc);
 			
-			if op != 0 { println!("{:02X}: {:02X}", self.regs.pc, op)};
+			println!("pc:{:04X}, op:{:02X}", self.regs.pc, op);
 			
 			OPCODE_MAP[op as usize](self);
 
 			self.total_cycles += 4;
-			self.regs.pc += 4;
+
+			self.regs.pc += 1;
 
 		}
 

@@ -45,14 +45,7 @@ fn main() {
 		.build()
 		.unwrap();
 
-	let mut emu = emulator::Emulator {
-		cpu: Cpu::new(),
-		mem: Memory::new(),
-		gl: GlGraphics::new(OPENGL),
-		rom_loaded: emulator::try_open_rom(&rom_path),
-		rom_header: Default::default(),
-		is_running: true,
-	};
+	let mut emu = emulator::Emulator::new(rom_path);
 
 	emu.read_header();
 
