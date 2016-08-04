@@ -15,11 +15,15 @@ use opengl_graphics::*;
 use cpu::Cpu;
 use mmu::Memory;
 
+#[macro_use]
+mod logger;
+
 mod cpu;
 mod gpu;
 mod mmu;
 mod emulator;
 mod timer;
+
 
 
 const OPENGL: OpenGL = OpenGL::V3_2;
