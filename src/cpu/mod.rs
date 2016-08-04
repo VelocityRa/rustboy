@@ -41,6 +41,8 @@ pub struct Registers  {
 	l: u8,		// HL: General purpose
 	sp: u16,			// SP: Stack pointer
 	pc: u16,			// PC: Program counter
+	halt: bool,
+	stop: bool,
 }
 
 
@@ -60,6 +62,23 @@ impl Registers {
 		// Could just a return ret++ work here?
 		return ret;
 	}
+
+	// Instructions
+
+	fn hlpp(&mut self) {
+		self.l += 1;
+		if self.l == 0 {
+			self.h += 1;
+		}
+	}
+
+	fn hlmm(&mut self) {
+		self.l -= 1;
+		if self.l == 0xff {
+			self.h -= 1;
+		}
+	}
+
 }
 
 #[derive(Default)]
@@ -177,10 +196,16 @@ impl Cpu {
 			let op: u8 = mem.rb(self.regs.pc);
 			
 			println!("pc:{:04X}, op:{:02X}", self.regs.pc, op);
+
+			self.regs.bump();
 			
 			let time = instructions::exec(op, &mut self.regs, mem);
 
+			if self.regs.stop {self.stop();}
+
 			self.total_cycles += time;
+
+			println!("Cycles: {}", self.total_cycles);
 
 			self.regs.pc += 1;
 
