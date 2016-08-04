@@ -37,12 +37,49 @@ impl Memory {
 	// Allocate a 64k byte array and zero initialize it
 	// This is all the system's RAM
 	pub fn new() -> Memory {
-		Memory {
+		let mut mem = Memory {
 			raw_mem: [0u8; MEM_SIZE],
 			rom_loaded: Vec::new(),
-		}
+		};
+		mem.power_on();
+		mem
 	}
 
+	 pub fn power_on(&mut self) {
+        // From http://problemkaputt.de/pandocs.htm#powerupsequence
+        self.write_byte_raw(0xff05, 0x00); // TIMA
+        self.write_byte_raw(0xff06, 0x00); // TMA
+        self.write_byte_raw(0xff07, 0x00); // TAC
+        self.write_byte_raw(0xff10, 0x80); // NR10
+        self.write_byte_raw(0xff11, 0xbf); // NR11
+        self.write_byte_raw(0xff12, 0xf3); // NR12
+        self.write_byte_raw(0xff14, 0xbf); // NR14
+        self.write_byte_raw(0xff16, 0x3f); // NR21
+        self.write_byte_raw(0xff17, 0x00); // NR22
+        self.write_byte_raw(0xff19, 0xbf); // NR24
+        self.write_byte_raw(0xff1a, 0x7f); // NR30
+        self.write_byte_raw(0xff1b, 0xff); // NR31
+        self.write_byte_raw(0xff1c, 0x9F); // NR32
+        self.write_byte_raw(0xff1e, 0xbf); // NR33
+        self.write_byte_raw(0xff20, 0xff); // NR41
+        self.write_byte_raw(0xff21, 0x00); // NR42
+        self.write_byte_raw(0xff22, 0x00); // NR43
+        self.write_byte_raw(0xff23, 0xbf); // NR30
+        self.write_byte_raw(0xff24, 0x77); // NR50
+        self.write_byte_raw(0xff25, 0xf3); // NR51
+        self.write_byte_raw(0xff26, 0xf1); // NR52
+        self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
+        self.write_byte_raw(0xff42, 0x00); // SCY
+        self.write_byte_raw(0xff43, 0x00); // SCX
+        self.write_byte_raw(0xff45, 0x00); // LYC
+        self.write_byte_raw(0xff47, 0xfc); // BGP
+        self.write_byte_raw(0xff48, 0xff); // OBP0
+        self.write_byte_raw(0xff49, 0xff); // OBP1
+        self.write_byte_raw(0xff4a, 0x00); // WY
+        self.write_byte_raw(0xff4b, 0x07); // WX, tweaked to position the window at (0, 0)
+        self.write_byte_raw(0xffff, 0x00); // IE
+
+	}
 	pub fn set_rom(&mut self, rom: Vec<u8>) {
 		self.rom_loaded = rom;
 	}
@@ -85,41 +122,52 @@ impl Memory {
 
 	// Public members
 
-	pub fn read_byte(&self, addr: u16) -> u8 {
+	// Read Byte
+	pub fn rb(&self, addr: u16) -> u8 {
 		self.debug_print_addr(addr, true);
 
 		match addr {
-			0x0000 ... 0x7FFF => self.rom_loaded[addr as u16 as usize],
+			0x0000 ... 0x3FFF => self.rom_loaded[addr as u16 as usize],
+			// TODO: Memory bank switching
+			0x4000 ... 0x7FFF => self.rom_loaded[addr as u16 as usize],
+			0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000),	// Mirrored memory
 			0xFEA0 ... 0xFEFF => panic!("Unusable memory accessed"),
-			_ => self.read_byte_raw(addr)
+			_ => self.read_byte_raw(addr),
 		}
 	}
 
-	pub fn read_word(&self, addr: u16) -> u16 {
+	// Read word
+	pub fn rw(&self, addr: u16) -> u16 {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory read: {:04X}", addr);
 
-		(self.read_byte(addr) as u16) << 8 |
-		(self.read_byte(addr + 1) as u16)
+		(self.rb(addr) as u16) << 8 |
+		(self.rb(addr + 1) as u16)
 	}
 
-	pub fn write_byte(&mut self, addr: u16, data: u8) {
+	// Write byte
+	pub fn wb(&mut self, addr: u16, data: u8) {
 		self.debug_print_addr(addr, false);
 
-		// TODO match addr {}
-		self.write_byte_raw(addr, data);
+		match addr {
+			0xE000 ... 0xFDFF => self.write_byte_raw(addr - 0x2000, data),	// Mirrored memory
+			0xFEA0 ... 0xFEFF => panic!("Unusable memory written to"),
+			_ => self.write_byte_raw(addr, data),
+		}
 	}
 
-	pub fn write_word(&mut self, addr: u16, data: u16) {
+	// Write word
+	pub fn ww(&mut self, addr: u16, data: u16) {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory write: {:04X}", addr);
 
-		self.write_byte(addr, (data >> 8) as u8);
-		self.write_byte(addr + 1, (data & 0x00FF) as u8);
+		self.wb(addr, (data >> 8) as u8);
+		self.wb(addr + 1, (data & 0x00FF) as u8);
 	}
 
-	fn debug_print_addr(&self, addr: u16, is_reading: bool) {
-		println!("{} {:04X} in {}", if is_reading {"Read from"} else {"Write to"}, addr,
+	fn debug_print_addr(&self, addr: u16, read: bool) {
+		println!("{} {:04X} in {}", if read {"Read from"} else {"Write to"}, addr,
+		
 		match addr {
 			0x0000 ... 0x3FFF => "16KB ROM Bank 00",	// (in cartridge, fixed at bank 00)
 			0x4000 ... 0x7FFF => "a 16KB ROM Bank", // (in cartridge, switchable bank number)
@@ -147,7 +195,7 @@ mod mem_tests {
 	use super::*;
 
 	#[test]
-	fn mem_read_and_write() {
+	fn mem_read_and_write_raw() {
 		let mut mem: Memory = Memory::new();
 
 		mem.write_byte_raw(0x8004, 0x12);
