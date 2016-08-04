@@ -19,6 +19,7 @@ mod cpu;
 mod gpu;
 mod mmu;
 mod emulator;
+mod timer;
 
 
 const OPENGL: OpenGL = OpenGL::V3_2;

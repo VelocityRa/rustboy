@@ -4,49 +4,63 @@
 
 #![allow(dead_code)]
 
-pub use self::opcodes::OPCODE_MAP;
-pub mod opcodes;
 pub mod instructions;
 
 use mmu::Memory;
 use emulator::Emulator;
+use timer::Timer;
 
 // CPU Clock speed
 pub const CLOCK_SPEED: f64 = 4.194304; // MHz
 
 // Clock cycles between every screen refresh 
-pub const SCREEN_REFRESH_INTERVAL: u32 = 70244; // clock cycles
+pub const SCREEN_REFRESH_INTERVAL: u32 = 70224; // clock cycles
+
+#[allow(dead_code)]
+pub enum Interrupt {
+    Vblank  = 0x01,
+    LCDStat = 0x02,
+    Timer   = 0x04,
+    Serial  = 0x08,
+    Joypad  = 0x10,
+}
 
 // Tell the compiler to generate a default() function
 // Which zero initializes everything
-#[derive(Default)]
-struct Register {
-	high: u8,
-	low: u8,
-}
-
-impl Register {
-	pub fn get_both(&self) -> u16 {
-		return (self.high as u16) << 8 | self.low as u16;
-	}
-	pub fn set_both(&mut self, val: u16) {
-		self.high = ((val & 0xFF00) >> 8 ) as u8;
-		self.low = (val & 0x00FF) as u8;
-	}
-}
 
 // Z80 registers
 #[derive(Default)]
-pub struct Registers {
-	a: u8,				// A: Accumulator
+pub struct Registers  {
+	a: u8,		// A: Accumulator
 	flags: Flags,		// Flags
-	bc: Register,		// BC: General purpose
-	de: Register,		// DE: General purpose
-	hl: Register,		// HL: General purpose
+	b: u8,
+	c: u8,		// BC: General purpose
+	d: u8,
+	e: u8,		// DE: General purpose
+	h: u8,
+	l: u8,		// HL: General purpose
 	sp: u16,			// SP: Stack pointer
 	pc: u16,			// PC: Program counter
 }
 
+
+impl Registers {
+	pub fn bc(&self) -> u16 { (self.b as u16) << 8 | self.c as u16 }
+	pub fn de(&self) -> u16 { (self.d as u16) << 8 | self.e as u16 }
+	pub fn hl(&self) -> u16 { (self.h as u16) << 8 | self.l as u16 }
+
+	pub fn bc_set(&mut self, new: u16){ self.b = (new >> 8) as u8; self.c = new as u8; }
+	pub fn de_set(&mut self, new: u16){ self.d = (new >> 8) as u8; self.e = new as u8; }
+	pub fn hl_set(&mut self, new: u16){ self.h = (new >> 8) as u8; self.l = new as u8; }
+
+	#[inline]
+	pub fn bump(&mut self) -> u16 {
+		let ret = self.pc;
+		self.pc += 1;
+		// Could just a return ret++ work here?
+		return ret;
+	}
+}
 
 #[derive(Default)]
 pub struct Flag {
@@ -84,21 +98,10 @@ pub struct Flags {
 	unused4: bool,	// Unused (always 0)
 }
 
-#[derive(Default)]
-pub struct Timers {
-	// This register is incremented at rate of 16384Hz
-	// Writing any value to this register resets it to 00h
-	div_reg: u8,
-
-	// This timer is incremented by a clock frequency specified by the TAC register ($FF07)
-	// When the value overflows (gets bigger than FFh) then it will be reset to the 
-	// value specified in TMA (FF06), and an interrupt will be requested
-	counter: u8,
-}
 
 pub struct Cpu {
 	regs: Registers,
-	timers: Timers,
+	timer: Timer,
 	total_cycles: u32,
 }
 
@@ -106,7 +109,7 @@ impl Cpu {
 	pub fn new() -> Cpu {
 		let mut cpu: Cpu = Cpu {
 			regs: Default::default(),
-			timers: Default::default(),
+			timer: Timer::new(),
 			total_cycles: 0,
 		};
 		cpu.reset_state();
@@ -119,9 +122,9 @@ impl Cpu {
 		self.regs.flags.zf.set();
 		self.regs.flags.h.set();
 		self.regs.flags.cy.set();
-		self.regs.bc.set_both(0x0013);
-		self.regs.de.set_both(0x00D8);
-		self.regs.hl.set_both(0x014D);
+		self.regs.bc_set(0x0013);
+		self.regs.de_set(0x00D8);
+		self.regs.hl_set(0x014D);
 		self.regs.sp = 0xFFFE;
 		self.regs.pc = 0x0150;
 	}
@@ -140,7 +143,8 @@ impl Cpu {
 	}
 
 
-	pub fn update_timers(&mut self, dt: f64, mem: &mut Memory) {
+	pub fn update_timers(&mut self, mem: &mut Memory) {
+		/*
 		// This register is incremented at rate of 16384Hz
 		self.timers.div_reg = 
 			self.timers.div_reg.wrapping_add(
@@ -158,22 +162,25 @@ impl Cpu {
 			// Read value from TMA - Timer Modulo
 			self.timers.counter = mem.read_byte(0xFF06); 
 		}
-
+*/
 		//println!("d:{:02X} \t c:{:02X}",  self.timers.div_reg, self.timers.counter);  Memory-map the timers
-		mem.write_byte(0xFF04, self.timers.div_reg);
-		mem.write_byte(0xFF05, self.timers.counter);
+
+
+		// TODO: Handle in memory mapping instead
+		//mem.write_byte(0xFF04, self.timers.div_reg);
+		//mem.write_byte(0xFF05, self.timers.counter);
 	}
 
 	// Dispatcher
 	pub fn run(&mut self, mem: &mut Memory) {
 		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
-			let op: u8 = mem.read_byte(self.regs.pc);
+			let op: u8 = mem.rb(self.regs.pc);
 			
 			println!("pc:{:04X}, op:{:02X}", self.regs.pc, op);
 			
-			OPCODE_MAP[op as usize](self);
+			let time = instructions::exec(op, &mut self.regs, mem);
 
-			self.total_cycles += 4;
+			self.total_cycles += time;
 
 			self.regs.pc += 1;
 
@@ -181,7 +188,7 @@ impl Cpu {
 
 		// Should this get reset or should we modulo above
 		// Not sure yet...
-		self.total_cycles = SCREEN_REFRESH_INTERVAL;
+		self.total_cycles = 0;
 	}
 }
 
@@ -205,10 +212,10 @@ mod cpu_tests {
 		regs.sp = 123;
 		assert_eq!(regs.sp, 123);
 
-		regs.hl.high = 3;
-		regs.hl.low = 0;
-		assert_eq!(regs.hl.high, 3);
-		assert_eq!(regs.hl.get_both(), 0b00000011_00000000);
+		regs.h = 3;
+		regs.l = 0;
+		assert_eq!(regs.h, 3);
+		assert_eq!(regs.hl(), 0b00000011_00000000);
 	}
 
 	#[test]

@@ -47,18 +47,16 @@ impl Emulator {
 	pub fn update(&mut self, args: &UpdateArgs) {
 		// Runs for a frame (~70k clock cycles)
 		self.cpu.run(&mut self.mem);
-
-		self.update_cpu_timers(args.dt);
-
 	}
 
 	pub fn read_header(&mut self) {
 		self.rom_header = read_header_impl(&self);
 	}
-
+/*
 	pub fn update_cpu_timers(&mut self, dt: f64) {
-		self.cpu.update_timers(dt, &mut self.mem);
+		self.cpu.update_timers(&mut self.mem);
 	}
+*/
 }
 
 fn open_rom<P: AsRef<Path>>(rom_path: P) -> io::Result< Vec<u8> > {
