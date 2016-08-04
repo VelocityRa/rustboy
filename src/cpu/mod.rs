@@ -31,18 +31,24 @@ pub enum Interrupt {
 // Z80 registers
 #[derive(Default)]
 pub struct Registers  {
+    pub ime: u32,
+	halt: bool,
+	stop: bool,
+
 	a: u8,		// A: Accumulator
-	flags: Flags,		// Flags
 	b: u8,
 	c: u8,		// BC: General purpose
 	d: u8,
 	e: u8,		// DE: General purpose
 	h: u8,
 	l: u8,		// HL: General purpose
+
+	flags: Flags,		// Flags
+
 	sp: u16,			// SP: Stack pointer
 	pc: u16,			// PC: Program counter
-	halt: bool,
-	stop: bool,
+
+	delay: u32
 }
 
 
@@ -63,6 +69,31 @@ impl Registers {
 		return ret;
 	}
 
+	// Interrupts
+	pub fn int_step(&mut self) {
+        match self.delay {
+            1 => { self.delay = 0; self.ime = 1; }
+            2 => { self.delay = 1; }
+            _ => {}
+        }
+    }
+
+    // Schedule enabling of interrupts
+    pub fn ei(&mut self, m: &mut Memory) {
+        if self.delay == 2 || m.rb(self.pc) == 0x76 {
+            self.delay = 1;
+        } else {
+            self.delay = 2;
+        }
+	info!("Enable interrupts, delay: {}", self.delay);
+    }
+
+    pub fn di(&mut self) {
+    	info!("Disable interrupts, before delay was {}", self.delay);
+        self.ime = 0;
+        self.delay = 0;
+    }
+
 	// Instructions
 
 	fn hlpp(&mut self) {
@@ -78,6 +109,7 @@ impl Registers {
 			self.h -= 1;
 		}
 	}
+
 
 }
 
@@ -106,10 +138,10 @@ impl Flag {
 // Pack the bools like a bitfield
 #[repr(C, packed)]
 pub struct Flags {
-	zf: Flag,		// Zero Flag
-	n: 	Flag,		// Add/Sub-Flag (BCD)
-	h: 	Flag,		// Half Carry Flag (BCD)
-	cy: Flag,		// Carry Flag
+	z: Flag,		// Zero Flag
+	n: Flag,		// Add/Sub-Flag (BCD)
+	h: Flag,		// Half Carry Flag (BCD)
+	c: Flag,		// Carry Flag
 
 	unused1: bool,	// Unused (always 0)
 	unused2: bool,	// Unused (always 0)
@@ -138,9 +170,9 @@ impl Cpu {
 	// Power Up Sequence
 	pub fn reset_state(&mut self) {
 		self.regs.a = 0x01;
-		self.regs.flags.zf.set();
+		self.regs.flags.z.set();
 		self.regs.flags.h.set();
-		self.regs.flags.cy.set();
+		self.regs.flags.c.set();
 		self.regs.bc_set(0x0013);
 		self.regs.de_set(0x00D8);
 		self.regs.hl_set(0x014D);
@@ -192,22 +224,37 @@ impl Cpu {
 
 	// Dispatcher
 	pub fn run(&mut self, mem: &mut Memory) {
-		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
-			let op: u8 = mem.rb(self.regs.pc);
-			
-			println!("pc:{:04X}, op:{:02X}", self.regs.pc, op);
 
-			self.regs.bump();
+		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
+			// Interrupt step
+			self.regs.int_step();
+
+
+			// Fetch opcode
+			let op: u8 = mem.rb(self.regs.pc);
+		
+			//debug!("PC:{:04X}, OP:{:02X}", self.regs.pc, op);
+			let pc_before = self.regs.pc;
+
+			// Increment PC
+			self.regs.pc += 1;
 			
+			// Execute instruction
 			let time = instructions::exec(op, &mut self.regs, mem);
 
+			match self.regs.pc - pc_before {
+				1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
+				2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
+					pc_before, op, mem.rb(pc_before + 1)),
+				3 => println!("[0x{:08X}] 0x{:02X} 0x{:02X} 0x{:02X}",
+					pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
+				_ => println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
+			};
+
 			if self.regs.stop {self.stop();}
+			self.total_cycles += time * 4;
 
-			self.total_cycles += time;
-
-			println!("Cycles: {}", self.total_cycles);
-
-			self.regs.pc += 1;
+			//debug!("Cycles: {}", self.total_cycles);
 
 		}
 
@@ -250,14 +297,14 @@ mod cpu_tests {
 		// Get mutable reference
 		let mut flags = cpu.get_flags_mut();
 
-		flags.zf.set();
+		flags.z.set();
 		flags.n.unset();
 		flags.h.set();
-		flags.cy.unset();
+		flags.c.unset();
 		
-		assert_eq!(flags.zf.get(), 	true);
+		assert_eq!(flags.z.get(), 	true);
 		assert_eq!(flags.n.get(), 	false);
 		assert_eq!(flags.h.get(), 	true);
-		assert_eq!(flags.cy.get(), 	false);
+		assert_eq!(flags.c.get(), 	false);
 	}
 }

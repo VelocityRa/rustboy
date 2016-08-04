@@ -14,7 +14,7 @@ impl Cpu {
 
 pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
-	macro_rules! ld(
+	macro_rules! ld (
 		($reg1:ident, $reg2:ident) => ({ r.$reg1 = r.$reg2; 1 }) );
 
 	macro_rules! ld_n (
@@ -24,7 +24,21 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 		($reg1:ident, $reg2:ident) => ({
 			r.$reg2 = m.rb(r.bump());
 			r.$reg1 = m.rb(r.bump());
-			3 }) );
+		3 }) );
+
+	macro_rules! call (
+		() => ({
+			let target = m.rw( ((r.bump() as u16) << 8) | r.bump() as u16);
+			r.sp -= 2;
+			m.ww(r.sp, r.pc);
+			r.pc = target;
+		6 }) );
+
+	macro_rules! call_if (
+		($should_call:expr) => (if $should_call {call!()} else {
+		3 }) );
+
+	//info!("Decoding {:02X}", inst);
 
 	// Table is from https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L279-L549
 	// Instruction macros implemented by me
@@ -84,7 +98,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         	r.flags.n.set(); r.flags.h.set(); 1 }                    // cpl
 
         // 0x30 => jr_n!((r.f & C) == 0),                              // jr_nc_n
-        0x31 => { println!("SP is {:04X}", m.rw(r.pc)); r.sp = m.rw(r.pc); r.pc += 2; 3 }                 // ld_spnn
+        0x31 => { debug!("SP is {:04X}", m.rw(r.pc)); r.sp = m.rw(r.pc); r.pc += 2; 3 } // ld_spnn
         0x32 => { m.wb(r.hl(), r.a); r.hlmm(); 2 }                  // ldd_hlma
         0x33 => { r.sp += 1; 2 }                                    // inc_sp
         // 0x34 => { inc_hlm(r, m); 3 }                                // inc_hlm
@@ -92,7 +106,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x36 => { let pc = m.rb(r.bump()); m.wb(r.hl(), pc); 3 }    // ld_hlmn
         //0x37 => { r.f = (r.f & Z) | C; 1 }                          // scf
         0x37 => { r.flags.n.unset(); r.flags.h.unset(); 
-        	r.flags.cy.set(); 1 }                          // scf
+        	r.flags.c.set(); 1 }                          // scf
         // 0x38 => jr_n!((r.f & C) != 0),                              // jr_c_n
         // 0x39 => { add_hlsp(r); 2 }                                  // add_hlsp
         0x3a => { r.a = m.rb(r.hl()); r.hlmm(); 2 }                 // ldd_ahlm
@@ -101,7 +115,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0x3d => dec!(a),                                            // dec_a
         0x3e => ld_n!(a),                                           // ld_an
         //0x3f => { r.f = (r.f & Z) | ((r.f & C) ^ C); 1 }            // ccf
-        0x3f => { r.flags.h.unset(); r.flags.n.unset(); r.flags.cy.toggle(); 1 } // ccf
+        0x3f => { r.flags.h.unset(); r.flags.n.unset(); r.flags.c.toggle(); 1 } // ccf
 
         0x40 => ld!(b, b),                                          // ld_bb
         0x41 => ld!(b, c),                                          // ld_bc
@@ -243,7 +257,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xc1 => pop!(b, c),                                         // pop_bc
         // 0xc2 => jp_n!((r.f & Z) == 0),                              // jp_nz_nn
         // 0xc3 => jp!(),                                              // jp_nn
-        // 0xc4 => call_if!((r.f & Z) == 0),                           // call_nz_n
+        0xc4 => call_if!(!r.flags.z.get()),                           // call_nz_n
         // 0xc5 => push!(b, c),                                        // push_bc
         // 0xc6 => { add_a!(m.rb(r.bump())); 2 }                       // add_an
         // 0xc7 => rst!(0x00),                                         // rst_00
@@ -251,8 +265,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xc9 => { r.ret(m); 4 }                                     // ret
         // 0xca => jp_n!((r.f & Z) != 0),                              // jp_z_nn
         // 0xcb => { exec_cb(m.rb(r.bump()), r, m) }                   // map_cb
-        // 0xcc => call_if!((r.f & Z) != 0),                           // call_z_n
-        // 0xcd => call!(),                                            // call
+        0xcc => call_if!(r.flags.z.get()),                           // call_z_n
+        0xcd => call!(),                                            // call
         // 0xce => { adc_a!(m.rb(r.bump())); 2 }                       // adc_an
         // 0xcf => rst!(0x08),                                         // rst_08
 
@@ -260,7 +274,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xd1 => pop!(d, e),                                         // pop_de
         // 0xd2 => jp_n!((r.f & C) == 0),                              // jp_nc_nn
         0xd3 => xx(),                                               // xx
-        // 0xd4 => call_if!((r.f & C) == 0),                           // call_nc_n
+        0xd4 => call_if!(!r.flags.c.get()),                           // call_nc_n
         // 0xd5 => push!(d, e),                                        // push_de
         // 0xd6 => { sub_a!(m.rb(r.bump())); 2 }                       // sub_an
         // 0xd7 => rst!(0x10),                                         // rst_10
@@ -268,7 +282,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xd9 => { r.ei(m); r.ret(m); 4 }                            // reti
         // 0xda => jp_n!((r.f & C) != 0),                              // jp_c_nn
         0xdb => xx(),                                               // xx
-        // 0xdc => call_if!((r.f & C) != 0),                           // call_c_n
+        0xdc => call_if!(r.flags.c.get()),                           // call_c_n
         0xdd => xx(),                                               // xx
         // 0xde => { sbc_a!(m.rb(r.bump())); 2 }                       // sbc_an
         // 0xdf => rst!(0x18),                                         // rst_18
@@ -293,7 +307,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xf0 => { r.a = m.rb(0xff00 | (m.rb(r.bump()) as u16)); 3 } // ld_aIOn
         // 0xf1 => { pop_af(r, m); 3 }                                 // pop_af
         // 0xf2 => { r.a = m.rb(0xff00 | (r.c as u16)); 2 }            // ld_aIOc
-        // 0xf3 => { r.di(); 1 }                                       // di
+        0xf3 => { r.di(); 1 }                                       // di
         0xf4 => xx(),                                               // xx
         // 0xf5 => push!(a, f),                                        // push_af
         // 0xf6 => { or_a!(m.rb(r.bump())); 2 }                        // or_an
@@ -301,13 +315,15 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xf8 => { ld_hlspn(r, m); 3 }                               // ld_hlspn
         // 0xf9 => { r.sp = r.hl(); 2 }                                // ld_sphl
         // 0xfa => { r.a = m.rb(m.rw(r.pc)); r.pc += 2; 4 }            // ld_ann
-        // 0xfb => { r.ei(m); 1 }                                      // ei
+        0xfb => { r.ei(m); 1 }                                      // ei
         0xfc => xx(),                                               // xx
         0xfd => xx(),                                               // xx
         // 0xfe => { cp_a!(m.rb(r.bump())); 2 }                        // cp_an
         // 0xff => rst!(0x38),                                         // rst_38
 
-        _ => 0
+        _ => {
+        	warn!("Unknown instruction opcode: {:02X}", inst); 0
+        },
 	}
 	
 }
