@@ -42,7 +42,7 @@ pub struct Registers  {
 	h: u8,
 	l: u8,		// HL: General purpose
 
-	flags: Flags,		// Flags
+	f: Flags,		// Flags
 
 	sp: u16,			// SP: Stack pointer
 	pc: u16,			// PC: Program counter
@@ -109,6 +109,11 @@ impl Registers {
 		}
 	}
 
+	fn ret(&mut self, m: &Memory) {
+		self.pc = m.rw(self.sp);
+		self.sp += 2;
+	}
+
 
 }
 
@@ -169,27 +174,27 @@ impl Cpu {
 	// Power Up Sequence
 	pub fn reset_state(&mut self) {
 		self.regs.a = 0x01;
-		self.regs.flags.z.set();
-		self.regs.flags.h.set();
-		self.regs.flags.c.set();
+		self.regs.f.z.set();
+		self.regs.f.h.set();
+		self.regs.f.c.set();
 		self.regs.bc_set(0x0013);
 		self.regs.de_set(0x00D8);
 		self.regs.hl_set(0x014D);
 		self.regs.sp = 0xFFFE;
-		self.regs.pc = 0x0150;
+		self.regs.pc = 0x0100;
 	}
 
 	pub fn get_regs(&self) -> &Registers {
 		&self.regs
 	}
 	pub fn get_flags(&self) -> &Flags {
-		&self.regs.flags
+		&self.regs.f
 	}
 	pub fn get_regs_mut(&mut self) -> &mut Registers {
 		&mut self.regs
 	}
 	pub fn get_flags_mut(&mut self) -> &mut Flags {
-		&mut self.regs.flags
+		&mut self.regs.f
 	}
 
 	pub fn update_timers(&mut self, mem: &mut Memory) {
@@ -239,7 +244,9 @@ impl Cpu {
 			// Execute instruction
 			let time = instructions::exec(op, &mut self.regs, mem);
 
-			match self.regs.pc - pc_before {
+			//println!("{} {}", self.regs.pc, pc_before);
+
+			match self.regs.pc as i32 - pc_before as i32 {
 				1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
 				2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
 					pc_before, op, mem.rb(pc_before + 1)),
@@ -276,7 +283,7 @@ mod cpu_tests {
 		// Get mutable reference
 		let mut regs = cpu.get_regs_mut();
 
-		assert_eq!(regs.pc, 0x0150);
+		assert_eq!(regs.pc, 0x0100);
 
 		regs.sp = 123;
 		assert_eq!(regs.sp, 123);
