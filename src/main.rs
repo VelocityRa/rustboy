@@ -12,9 +12,6 @@ use piston::window::AdvancedWindow;
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::*;
 
-use cpu::Cpu;
-use mmu::Memory;
-
 #[macro_use]
 mod logger;
 
@@ -23,7 +20,6 @@ mod gpu;
 mod mmu;
 mod emulator;
 mod timer;
-
 
 
 const OPENGL: OpenGL = OpenGL::V3_2;
@@ -54,6 +50,7 @@ fn main() {
 
 	emu.read_header();
 
+	// Append game name to title
 	window.set_title(
 		format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
 		);
@@ -69,5 +66,4 @@ fn main() {
 			emu.update(&u);
 		}
 	}
-
 }

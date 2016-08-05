@@ -7,7 +7,6 @@
 pub mod instructions;
 
 use mmu::Memory;
-use emulator::Emulator;
 use timer::Timer;
 
 // CPU Clock speed
@@ -85,7 +84,7 @@ impl Registers {
         } else {
             self.delay = 2;
         }
-	info!("Enable interrupts, delay: {}", self.delay);
+		info!("Enable interrupts, delay: {}", self.delay);
     }
 
     pub fn di(&mut self) {
@@ -193,7 +192,6 @@ impl Cpu {
 		&mut self.regs.flags
 	}
 
-
 	pub fn update_timers(&mut self, mem: &mut Memory) {
 		/*
 		// This register is incremented at rate of 16384Hz
@@ -228,7 +226,6 @@ impl Cpu {
 		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
 			// Interrupt step
 			self.regs.int_step();
-
 
 			// Fetch opcode
 			let op: u8 = mem.rb(self.regs.pc);

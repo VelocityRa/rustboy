@@ -1,6 +1,8 @@
 
 use cpu::Interrupt;
 
+#[allow(dead_code)]
+#[allow(unused_variables)]
 
 #[derive(Default)]
 struct Clock {
@@ -18,6 +20,7 @@ pub struct Timer {
 	// When the value overflows (gets bigger than FFh) then it will be reset to the 
 	// value specified in TMA (FF06), and an interrupt will be requested
     pub tima: u8,
+
     pub tma: u8,
     pub tac: u8,
 

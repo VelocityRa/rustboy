@@ -33,7 +33,7 @@ impl Emulator {
 
 		// Read rom and move ownership to memory component
 		emu.mem.set_rom(try_open_rom(&rom_path));
-		
+
 		emu
 	}
 

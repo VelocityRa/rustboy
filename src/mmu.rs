@@ -3,7 +3,6 @@
 //
 
 /*
-
   0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
   4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
   ________________________________________________________________________
@@ -20,17 +19,27 @@
   FF00-FF7F   I/O Ports
   FF80-FFFE   High RAM (HRAM)
   FFFF        Interrupt Enable Register
-
 */
 
 #![allow(dead_code)]
+
+use cpu::Cpu;
+use timer::Timer;
 
 const START_MAPPED_MEM: usize = 0x8000;
 const MEM_SIZE: usize = 0xFFFF + 1 - START_MAPPED_MEM;
 
 pub struct Memory {
+	// Interrupt flags, http://problemkaputt.de/pandocs.htm#interrupts
+	// The master enable flag will be on the cpu
+	if_: u8,
+	ie_: u8,
+
 	raw_mem: [u8; MEM_SIZE],
+
 	pub rom_loaded: Vec<u8>,
+
+	pub timer: Box<Timer>,
 }
 
 impl Memory {
@@ -38,46 +47,49 @@ impl Memory {
 	// This is all the system's RAM
 	pub fn new() -> Memory {
 		let mut mem = Memory {
+			if_: 0u8,
+			ie_: 0u8,
 			raw_mem: [0u8; MEM_SIZE],
 			rom_loaded: Vec::new(),
+			timer: Box::new(Timer::new()),
 		};
 		mem.power_on();
 		mem
 	}
 
-	 pub fn power_on(&mut self) {
-        // From http://problemkaputt.de/pandocs.htm#powerupsequence
-        self.write_byte_raw(0xff05, 0x00); // TIMA
-        self.write_byte_raw(0xff06, 0x00); // TMA
-        self.write_byte_raw(0xff07, 0x00); // TAC
-        self.write_byte_raw(0xff10, 0x80); // NR10
-        self.write_byte_raw(0xff11, 0xbf); // NR11
-        self.write_byte_raw(0xff12, 0xf3); // NR12
-        self.write_byte_raw(0xff14, 0xbf); // NR14
-        self.write_byte_raw(0xff16, 0x3f); // NR21
-        self.write_byte_raw(0xff17, 0x00); // NR22
-        self.write_byte_raw(0xff19, 0xbf); // NR24
-        self.write_byte_raw(0xff1a, 0x7f); // NR30
-        self.write_byte_raw(0xff1b, 0xff); // NR31
-        self.write_byte_raw(0xff1c, 0x9F); // NR32
-        self.write_byte_raw(0xff1e, 0xbf); // NR33
-        self.write_byte_raw(0xff20, 0xff); // NR41
-        self.write_byte_raw(0xff21, 0x00); // NR42
-        self.write_byte_raw(0xff22, 0x00); // NR43
-        self.write_byte_raw(0xff23, 0xbf); // NR30
-        self.write_byte_raw(0xff24, 0x77); // NR50
-        self.write_byte_raw(0xff25, 0xf3); // NR51
-        self.write_byte_raw(0xff26, 0xf1); // NR52
-        self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
-        self.write_byte_raw(0xff42, 0x00); // SCY
-        self.write_byte_raw(0xff43, 0x00); // SCX
-        self.write_byte_raw(0xff45, 0x00); // LYC
-        self.write_byte_raw(0xff47, 0xfc); // BGP
-        self.write_byte_raw(0xff48, 0xff); // OBP0
-        self.write_byte_raw(0xff49, 0xff); // OBP1
-        self.write_byte_raw(0xff4a, 0x00); // WY
-        self.write_byte_raw(0xff4b, 0x07); // WX, tweaked to position the window at (0, 0)
-        self.write_byte_raw(0xffff, 0x00); // IE
+	pub fn power_on(&mut self) {
+		// From http://problemkaputt.de/pandocs.htm#powerupsequence
+		self.write_byte_raw(0xff05, 0x00); // TIMA
+		self.write_byte_raw(0xff06, 0x00); // TMA
+		self.write_byte_raw(0xff07, 0x00); // TAC
+		self.write_byte_raw(0xff10, 0x80); // NR10
+		self.write_byte_raw(0xff11, 0xbf); // NR11
+		self.write_byte_raw(0xff12, 0xf3); // NR12
+		self.write_byte_raw(0xff14, 0xbf); // NR14
+		self.write_byte_raw(0xff16, 0x3f); // NR21
+		self.write_byte_raw(0xff17, 0x00); // NR22
+		self.write_byte_raw(0xff19, 0xbf); // NR24
+		self.write_byte_raw(0xff1a, 0x7f); // NR30
+		self.write_byte_raw(0xff1b, 0xff); // NR31
+		self.write_byte_raw(0xff1c, 0x9F); // NR32
+		self.write_byte_raw(0xff1e, 0xbf); // NR33
+		self.write_byte_raw(0xff20, 0xff); // NR41
+		self.write_byte_raw(0xff21, 0x00); // NR42
+		self.write_byte_raw(0xff22, 0x00); // NR43
+		self.write_byte_raw(0xff23, 0xbf); // NR30
+		self.write_byte_raw(0xff24, 0x77); // NR50
+		self.write_byte_raw(0xff25, 0xf3); // NR51
+		self.write_byte_raw(0xff26, 0xf1); // NR52
+		self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
+		self.write_byte_raw(0xff42, 0x00); // SCY
+		self.write_byte_raw(0xff43, 0x00); // SCX
+		self.write_byte_raw(0xff45, 0x00); // LYC
+		self.write_byte_raw(0xff47, 0xfc); // BGP
+		self.write_byte_raw(0xff48, 0xff); // OBP0
+		self.write_byte_raw(0xff49, 0xff); // OBP1
+		self.write_byte_raw(0xff4a, 0x00); // WY
+		self.write_byte_raw(0xff4b, 0x07); // WX, tweaked to position the window at (0, 0)
+		self.write_byte_raw(0xffff, 0x00); // IE
 
 	}
 	pub fn set_rom(&mut self, rom: Vec<u8>) {
@@ -124,7 +136,7 @@ impl Memory {
 
 	// Read Byte
 	pub fn rb(&self, addr: u16) -> u8 {
-		self.debug_print_addr(addr, true);
+		//self.debug_print_addr(addr, true);
 
 		match addr {
 			0x0000 ... 0x3FFF => self.rom_loaded[addr as u16 as usize],
@@ -132,6 +144,10 @@ impl Memory {
 			0x4000 ... 0x7FFF => self.rom_loaded[addr as u16 as usize],
 			0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000),	// Mirrored memory
 			0xFEA0 ... 0xFEFF => panic!("Unusable memory accessed"),
+			0xFF00 ... 0xFF79 => self.ioreg_rb(addr),
+
+			// Timer Registers
+			//0xFF04 => self.
 			_ => self.read_byte_raw(addr),
 		}
 	}
@@ -147,11 +163,12 @@ impl Memory {
 
 	// Write byte
 	pub fn wb(&mut self, addr: u16, data: u8) {
-		self.debug_print_addr(addr, false);
+		//self.debug_print_addr(addr, false);
 
 		match addr {
 			0xE000 ... 0xFDFF => self.write_byte_raw(addr - 0x2000, data),	// Mirrored memory
 			0xFEA0 ... 0xFEFF => panic!("Unusable memory written to"),
+			0xFF00 ... 0xFF79 => self.ioreg_wb(addr, data),
 			_ => self.write_byte_raw(addr, data),
 		}
 	}
@@ -165,8 +182,52 @@ impl Memory {
 		self.wb(addr + 1, (data & 0x00FF) as u8);
 	}
 
+	/// Reads a value from a known IO type register
+	fn ioreg_rb(&self, addr: u16) -> u8 {
+		debug!("ioreg_rb {:x}", addr);
+		match (addr >> 4) & 0xF {
+			0x0 => {
+				match addr & 0xF {
+					// TODO: Input
+					//0x0 => self.input.rb(addr),
+					0x0 => {warn!("Input requested (unimplemented) in address {:04X}", addr); 0},
+					0x4 => self.timer.div,
+					0x5 => self.timer.tima,
+					0x6 => self.timer.tma,
+					0x7 => self.timer.tac,
+					0xf => self.if_,
+
+					_ => 0xFF,
+				}
+			}
+			_ => 0xFF,
+		}
+	}
+
+	fn ioreg_wb(&mut self, addr: u16, val: u8) {
+        debug!("ioreg_wb {:x} {:x}", addr, val);
+        match (addr >> 4) & 0xF {
+			0x0 => {
+				match addr & 0xF {
+					0x0 => { debug!("Serial data transfer (unimplemented) in address 
+						{:04X}, data {:02X}", addr, val)}
+                    0x4 => { self.timer.div = 0; }
+                    0x5 => { self.timer.tima = val; }
+                    0x6 => { self.timer.tma = val; }
+                    0x7 => {
+                        self.timer.tac = val;
+                        self.timer.update();
+                    }
+                    0xf => { self.if_ = val; }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+	}
+
 	fn debug_print_addr(&self, addr: u16, read: bool) {
-		println!("{} {:04X} in {}", if read {"Read from"} else {"Write to"}, addr,
+		debug!("{} {:04X} in {}", if read {"Read from"} else {"Write to"}, addr,
 		
 		match addr {
 			0x0000 ... 0x3FFF => "16KB ROM Bank 00",	// (in cartridge, fixed at bank 00)

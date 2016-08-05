@@ -98,7 +98,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         	r.flags.n.set(); r.flags.h.set(); 1 }                    // cpl
 
         // 0x30 => jr_n!((r.f & C) == 0),                              // jr_nc_n
-        0x31 => { debug!("SP is {:04X}", m.rw(r.pc)); r.sp = m.rw(r.pc); r.pc += 2; 3 } // ld_spnn
+        0x31 => { r.sp = m.rw(r.pc); r.pc += 2; 3 } // ld_spnn
         0x32 => { m.wb(r.hl(), r.a); r.hlmm(); 2 }                  // ldd_hlma
         0x33 => { r.sp += 1; 2 }                                    // inc_sp
         // 0x34 => { inc_hlm(r, m); 3 }                                // inc_hlm
@@ -328,4 +328,4 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 	
 }
 
-fn xx() -> u32 { panic!(); 0 }
+fn xx() -> u32 { panic!("Invalid instruction opcode"); 0 }

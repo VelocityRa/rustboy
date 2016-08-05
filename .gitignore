@@ -5,3 +5,6 @@ roms/
 # Sublime Text stuff
 *.sublime-workspace
 *.sublime-project
+
+# Game Boy disassembler
+gb-disasm.exe
