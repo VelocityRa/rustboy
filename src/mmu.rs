@@ -157,8 +157,8 @@ impl Memory {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory read: {:04X}", addr);
 
-		(self.rb(addr) as u16) << 8 |
-		(self.rb(addr + 1) as u16)
+		(self.rb(addr) as u16) |
+		(self.rb(addr + 1) as u16) << 8
 	}
 
 	// Write byte
@@ -178,8 +178,8 @@ impl Memory {
 		assert!(addr <= 0xFFFF - 1,
 		 "Invalid memory write: {:04X}", addr);
 
-		self.wb(addr, (data >> 8) as u8);
-		self.wb(addr + 1, (data & 0x00FF) as u8);
+		self.wb(addr, data as u8);
+		self.wb(addr + 1, (data >> 8) as u8);
 	}
 
 	/// Reads a value from a known IO type register
