@@ -12,6 +12,10 @@ impl Cpu {
 	}
 }
 
+//	======================================
+//	|          CPU INSTRUCTIONS          |
+//	======================================
+
 pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
 	macro_rules! ld (
@@ -56,7 +60,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 		3 }) );
 
 	macro_rules! jr_n {
-	    ($cond:expr) => (if $cond {jr!(); 12} else {r.pc += 1; 8})
+	    ($cond:expr) => (if $cond {jr!()} else {r.pc += 1; 2})
 	}
 
 	macro_rules! inc (
@@ -331,7 +335,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xc8 => ret_if!(r.f.z.get()),                            // ret_z
         0xc9 => { r.ret(m); 4 }                                     // ret
         0xca => jp_n!(r.f.z.get()),                              // jp_z_nn
-        // 0xcb => { exec_cb(m.rb(r.bump()), r, m) }                   // map_cb
+        0xcb => { exec_cb(m.rb(r.bump()), r, m) }                   // map_cb
         0xcc => call_if!(r.f.z.get()),                           // call_z_n
         0xcd => call!(),                                            // call
         // 0xce => { adc_a!(m.rb(r.bump())); 2 }                       // adc_an
@@ -392,7 +396,6 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         	warn!("Unknown instruction opcode: {:02X}", inst); 0
         },
 	}
-	
 }
 
 fn xx() -> u32 { panic!("Invalid instruction opcode"); 0 }
@@ -401,4 +404,374 @@ fn add_signed(a: u16, b: u8) -> u16 {
 	(a as i16 + (b as i8 as i16)) as u16
 }
 
+//	======================================
+//	|           CB INSTRUCTIONS          |
+//	======================================
+ 
 
+// From https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L555-L896
+#[allow(unused_parens)]
+pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
+    macro_rules! rl( ($reg:expr, $cy:expr) => ({
+        let ci = if r.f.c.get() {1} else {0};
+        let co = $reg & 0x80;
+        r.f.h.unset(); r.f.n.unset();
+        $reg = ($reg << 1) | ci;
+        if $reg == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if co != 0 {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+
+    macro_rules! rlc( ($reg:expr, $cy:expr) => ({
+        let ci = if ($reg & 0x80) != 0 {1} else {0};
+        r.f.h.unset(); r.f.n.unset();
+        $reg = ($reg << 1) | ci;
+        if $reg == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if ci != 0 {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+
+    macro_rules! rr( ($reg:expr, $cy:expr) => ({
+        let ci = if r.f.c.get() {0x80} else {0};
+        let co = if ($reg & 0x01) != 0 {true} else {false};
+        r.f.h.unset(); r.f.n.unset();
+        $reg = ($reg >> 1) | ci;
+        if $reg == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if co {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+
+    macro_rules! rrc( ($reg:expr, $cy:expr) => ({
+        let ci = $reg & 0x01;
+        r.f.h.unset(); r.f.n.unset();
+        $reg = ($reg >> 1) | (ci << 7);
+        if $reg == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if ci != 0 {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+    macro_rules! hlm( ($i:ident, $s:stmt) => ({
+        let mut $i = m.rb(r.hl());
+        r.f.h.unset(); r.f.n.unset();
+        $s;
+        m.wb(r.hl(), $i);
+    }) );
+    macro_rules! hlfrob( ($i:ident, $e:expr) => ({
+        let $i = m.rb(r.hl());
+        r.f.h.unset(); r.f.n.unset();
+        m.wb(r.hl(), $e);
+    }) );
+    macro_rules! sra( ($e:expr, $cy:expr) => ({
+        let co = $e & 1;
+        r.f.h.unset(); r.f.n.unset();
+        $e = (($e as i8) >> 1) as u8;
+        if $e == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if co != 0 {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+    macro_rules! srl( ($e:expr, $cy:expr) => ({
+        let co = $e & 1;
+        r.f.h.unset(); r.f.n.unset();
+        $e = $e >> 1;
+        if $e == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if co != 0 {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+    macro_rules! sla( ($e:expr, $cy:expr) => ({
+        let co = ($e >> 7) & 1;
+        r.f.h.unset(); r.f.n.unset();
+        $e = $e << 1;
+        if $e == 0 {r.f.z.set()} else {r.f.z.unset()};
+        if co != 0 {r.f.c.set()} else {r.f.c.unset()};
+        $cy as u32
+    }) );
+    macro_rules! swap( ($e:expr) => ({
+    	r.f.h.unset(); r.f.n.unset(); r.f.c.unset();
+        $e = ($e << 4) | (($e & 0xf0) >> 4);
+        if $e == 0 {r.f.z.set()} else {r.f.z.unset()};
+        2 as u32
+    }) );
+    macro_rules! bit( ($e:expr, $bit:expr) => ({
+    	r.f.h.set(); r.f.n.unset();
+        if $e & (1 << $bit) == 0 {r.f.z.set()} else {r.f.z.unset()};
+        2 as u32
+    }) );
+
+    debug!("CB {:02X} executing", inst);
+
+
+    match inst {
+        0x00 => rlc!(r.b, 2),                                       // rlc_b
+        0x01 => rlc!(r.c, 2),                                       // rlc_c
+        0x02 => rlc!(r.d, 2),                                       // rlc_d
+        0x03 => rlc!(r.e, 2),                                       // rlc_e
+        0x04 => rlc!(r.h, 2),                                       // rlc_h
+        0x05 => rlc!(r.l, 2),                                       // rlc_l
+        0x06 => { hlm!(hl, rlc!(hl, 1)); 4 }                        // rlc_hlm
+        0x07 => rlc!(r.a, 2),                                       // rlc_a
+        0x08 => rrc!(r.b, 2),                                       // rrc_b
+        0x09 => rrc!(r.c, 2),                                       // rrc_c
+        0x0a => rrc!(r.d, 2),                                       // rrc_d
+        0x0b => rrc!(r.e, 2),                                       // rrc_e
+        0x0c => rrc!(r.h, 2),                                       // rrc_h
+        0x0d => rrc!(r.l, 2),                                       // rrc_l
+        0x0e => { hlm!(hl, rrc!(hl, 1)); 4 }                        // rrc_hlm
+        0x0f => rrc!(r.a, 2),                                       // rrc_a
+
+        0x10 => rl!(r.b, 2),                                        // rl_b
+        0x11 => rl!(r.c, 2),                                        // rl_c
+        0x12 => rl!(r.d, 2),                                        // rl_d
+        0x13 => rl!(r.e, 2),                                        // rl_e
+        0x14 => rl!(r.h, 2),                                        // rl_h
+        0x15 => rl!(r.l, 2),                                        // rl_l
+        0x16 => { hlm!(hl, rl!(hl, 1)); 4 }                         // rl_hlm
+        0x17 => rl!(r.a, 2),                                        // rl_a
+        0x18 => rr!(r.b, 2),                                        // rr_b
+        0x19 => rr!(r.c, 2),                                        // rr_c
+        0x1a => rr!(r.d, 2),                                        // rr_d
+        0x1b => rr!(r.e, 2),                                        // rr_e
+        0x1c => rr!(r.h, 2),                                        // rr_h
+        0x1d => rr!(r.l, 2),                                        // rr_l
+        0x1e => { hlm!(hl, rr!(hl, 1)); 4 }                         // rr_hlm
+        0x1f => rr!(r.a, 2),                                        // rr_a
+
+        0x20 => sla!(r.b, 2),                                       // sla_b
+        0x21 => sla!(r.c, 2),                                       // sla_c
+        0x22 => sla!(r.d, 2),                                       // sla_d
+        0x23 => sla!(r.e, 2),                                       // sla_e
+        0x24 => sla!(r.h, 2),                                       // sla_h
+        0x25 => sla!(r.l, 2),                                       // sla_l
+        0x26 => { hlm!(hl, sla!(hl, 1)); 4 }                        // sla_hlm
+        0x27 => sla!(r.a, 2),                                       // sla_a
+        0x28 => sra!(r.b, 2),                                       // sra_b
+        0x29 => sra!(r.c, 2),                                       // sra_c
+        0x2a => sra!(r.d, 2),                                       // sra_d
+        0x2b => sra!(r.e, 2),                                       // sra_e
+        0x2c => sra!(r.h, 2),                                       // sra_h
+        0x2d => sra!(r.l, 2),                                       // sra_l
+        0x2e => { hlm!(hl, sra!(hl, 1)); 4 }                        // sra_hlm
+        0x2f => sra!(r.a, 2),                                       // sra_a
+
+        0x30 => swap!(r.b),                                         // swap_b
+        0x31 => swap!(r.c),                                         // swap_c
+        0x32 => swap!(r.d),                                         // swap_d
+        0x33 => swap!(r.e),                                         // swap_e
+        0x34 => swap!(r.h),                                         // swap_h
+        0x35 => swap!(r.l),                                         // swap_l
+        0x36 => { hlm!(hl, swap!(hl)); 4 }                          // swap_hlm
+        0x37 => swap!(r.a),                                         // swap_a
+        0x38 => srl!(r.b, 2),                                       // srl_b
+        0x39 => srl!(r.c, 2),                                       // srl_c
+        0x3a => srl!(r.d, 2),                                       // srl_d
+        0x3b => srl!(r.e, 2),                                       // srl_e
+        0x3c => srl!(r.h, 2),                                       // srl_h
+        0x3d => srl!(r.l, 2),                                       // srl_l
+        0x3e => { hlm!(hl, srl!(hl, 1)); 4 }                        // srl_hlm
+        0x3f => srl!(r.a, 2),                                       // srl_a
+
+        0x40 => bit!(r.b, 0),                                       // bit_0b
+        0x41 => bit!(r.c, 0),                                       // bit_0c
+        0x42 => bit!(r.d, 0),                                       // bit_0d
+        0x43 => bit!(r.e, 0),                                       // bit_0e
+        0x44 => bit!(r.h, 0),                                       // bit_0h
+        0x45 => bit!(r.l, 0),                                       // bit_0l
+        0x46 => { bit!(m.rb(r.hl()), 0); 3 }                        // bit_0hlm
+        0x47 => bit!(r.a, 0),                                       // bit_0a
+        0x48 => bit!(r.b, 1),                                       // bit_1b
+        0x49 => bit!(r.c, 1),                                       // bit_1c
+        0x4a => bit!(r.d, 1),                                       // bit_1d
+        0x4b => bit!(r.e, 1),                                       // bit_1e
+        0x4c => bit!(r.h, 1),                                       // bit_1h
+        0x4d => bit!(r.l, 1),                                       // bit_1l
+        0x4e => { bit!(m.rb(r.hl()), 1); 3 }                        // bit_1hlm
+        0x4f => bit!(r.a, 1),                                       // bit_1a
+
+        0x50 => bit!(r.b, 2),                                       // bit_2b
+        0x51 => bit!(r.c, 2),                                       // bit_2c
+        0x52 => bit!(r.d, 2),                                       // bit_2d
+        0x53 => bit!(r.e, 2),                                       // bit_2e
+        0x54 => bit!(r.h, 2),                                       // bit_2h
+        0x55 => bit!(r.l, 2),                                       // bit_2l
+        0x56 => { bit!(m.rb(r.hl()), 2); 3 }                        // bit_2hlm
+        0x57 => bit!(r.a, 2),                                       // bit_2a
+        0x58 => bit!(r.b, 3),                                       // bit_3b
+        0x59 => bit!(r.c, 3),                                       // bit_3c
+        0x5a => bit!(r.d, 3),                                       // bit_3d
+        0x5b => bit!(r.e, 3),                                       // bit_3e
+        0x5c => bit!(r.h, 3),                                       // bit_3h
+        0x5d => bit!(r.l, 3),                                       // bit_3l
+        0x5e => { bit!(m.rb(r.hl()), 3); 3 }                        // bit_3hlm
+        0x5f => bit!(r.a, 3),                                       // bit_3a
+
+        0x60 => bit!(r.b, 4),                                       // bit_4b
+        0x61 => bit!(r.c, 4),                                       // bit_4c
+        0x62 => bit!(r.d, 4),                                       // bit_4d
+        0x63 => bit!(r.e, 4),                                       // bit_4e
+        0x64 => bit!(r.h, 4),                                       // bit_4h
+        0x65 => bit!(r.l, 4),                                       // bit_4l
+        0x66 => { bit!(m.rb(r.hl()), 4); 3 }                        // bit_4hlm
+        0x67 => bit!(r.a, 4),                                       // bit_4a
+        0x68 => bit!(r.b, 5),                                       // bit_5b
+        0x69 => bit!(r.c, 5),                                       // bit_5c
+        0x6a => bit!(r.d, 5),                                       // bit_5d
+        0x6b => bit!(r.e, 5),                                       // bit_5e
+        0x6c => bit!(r.h, 5),                                       // bit_5h
+        0x6d => bit!(r.l, 5),                                       // bit_5l
+        0x6e => { bit!(m.rb(r.hl()), 5); 3 }                        // bit_5hlm
+        0x6f => bit!(r.a, 5),                                       // bit_5a
+
+        0x70 => bit!(r.b, 6),                                       // bit_6b
+        0x71 => bit!(r.c, 6),                                       // bit_6c
+        0x72 => bit!(r.d, 6),                                       // bit_6d
+        0x73 => bit!(r.e, 6),                                       // bit_6e
+        0x74 => bit!(r.h, 6),                                       // bit_6h
+        0x75 => bit!(r.l, 6),                                       // bit_6l
+        0x76 => { bit!(m.rb(r.hl()), 6); 3 }                        // bit_6hlm
+        0x77 => bit!(r.a, 6),                                       // bit_6a
+        0x78 => bit!(r.b, 7),                                       // bit_7b
+        0x79 => bit!(r.c, 7),                                       // bit_7c
+        0x7a => bit!(r.d, 7),                                       // bit_7d
+        0x7b => bit!(r.e, 7),                                       // bit_7e
+        0x7c => bit!(r.h, 7),                                       // bit_7h
+        0x7d => bit!(r.l, 7),                                       // bit_7l
+        0x7e => { bit!(m.rb(r.hl()), 7); 3 }                        // bit_7hlm
+        0x7f => bit!(r.a, 7),                                       // bit_7a
+
+        0x80 => { r.b &= !(1 << 0); 2 }                             // res_0b
+        0x81 => { r.c &= !(1 << 0); 2 }                             // res_0c
+        0x82 => { r.d &= !(1 << 0); 2 }                             // res_0d
+        0x83 => { r.e &= !(1 << 0); 2 }                             // res_0e
+        0x84 => { r.h &= !(1 << 0); 2 }                             // res_0h
+        0x85 => { r.l &= !(1 << 0); 2 }                             // res_0l
+        0x86 => { hlfrob!(hl, hl & !(1 << 0)); 4 }                  // set_0hlm
+        0x87 => { r.a &= !(1 << 0); 2 }                             // res_0a
+        0x88 => { r.b &= !(1 << 1); 2 }                             // res_1b
+        0x89 => { r.c &= !(1 << 1); 2 }                             // res_1c
+        0x8a => { r.d &= !(1 << 1); 2 }                             // res_1d
+        0x8b => { r.e &= !(1 << 1); 2 }                             // res_1e
+        0x8c => { r.h &= !(1 << 1); 2 }                             // res_1h
+        0x8d => { r.l &= !(1 << 1); 2 }                             // res_1l
+        0x8e => { hlfrob!(hl, hl & !(1 << 1)); 4 }                  // set_1hlm
+        0x8f => { r.a &= !(1 << 1); 2 }                             // res_1a
+
+        0x90 => { r.b &= !(1 << 2); 2 }                             // res_2b
+        0x91 => { r.c &= !(1 << 2); 2 }                             // res_2c
+        0x92 => { r.d &= !(1 << 2); 2 }                             // res_2d
+        0x93 => { r.e &= !(1 << 2); 2 }                             // res_2e
+        0x94 => { r.h &= !(1 << 2); 2 }                             // res_2h
+        0x95 => { r.l &= !(1 << 2); 2 }                             // res_2l
+        0x96 => { hlfrob!(hl, hl & !(1 << 2)); 4 }                  // set_2hlm
+        0x97 => { r.a &= !(1 << 2); 2 }                             // res_2a
+        0x98 => { r.b &= !(1 << 3); 2 }                             // res_3b
+        0x99 => { r.c &= !(1 << 3); 2 }                             // res_3c
+        0x9a => { r.d &= !(1 << 3); 2 }                             // res_3d
+        0x9b => { r.e &= !(1 << 3); 2 }                             // res_3e
+        0x9c => { r.h &= !(1 << 3); 2 }                             // res_3h
+        0x9d => { r.l &= !(1 << 3); 2 }                             // res_3l
+        0x9e => { hlfrob!(hl, hl & !(1 << 3)); 4 }                  // set_3hlm
+        0x9f => { r.a &= !(1 << 3); 2 }                             // res_3a
+
+        0xa0 => { r.b &= !(1 << 4); 2 }                             // res_4b
+        0xa1 => { r.c &= !(1 << 4); 2 }                             // res_4c
+        0xa2 => { r.d &= !(1 << 4); 2 }                             // res_4d
+        0xa3 => { r.e &= !(1 << 4); 2 }                             // res_4e
+        0xa4 => { r.h &= !(1 << 4); 2 }                             // res_4h
+        0xa5 => { r.l &= !(1 << 4); 2 }                             // res_4l
+        0xa6 => { hlfrob!(hl, hl & !(1 << 4)); 4 }                  // set_4hlm
+        0xa7 => { r.a &= !(1 << 4); 2 }                             // res_4a
+        0xa8 => { r.b &= !(1 << 5); 2 }                             // res_5b
+        0xa9 => { r.c &= !(1 << 5); 2 }                             // res_5c
+        0xaa => { r.d &= !(1 << 5); 2 }                             // res_5d
+        0xab => { r.e &= !(1 << 5); 2 }                             // res_5e
+        0xac => { r.h &= !(1 << 5); 2 }                             // res_5h
+        0xad => { r.l &= !(1 << 5); 2 }                             // res_5l
+        0xae => { hlfrob!(hl, hl & !(1 << 5)); 4 }                  // set_5hlm
+        0xaf => { r.a &= !(1 << 5); 2 }                             // res_5a
+
+        0xb0 => { r.b &= !(1 << 6); 2 }                             // res_6b
+        0xb1 => { r.c &= !(1 << 6); 2 }                             // res_6c
+        0xb2 => { r.d &= !(1 << 6); 2 }                             // res_6d
+        0xb3 => { r.e &= !(1 << 6); 2 }                             // res_6e
+        0xb4 => { r.h &= !(1 << 6); 2 }                             // res_6h
+        0xb5 => { r.l &= !(1 << 6); 2 }                             // res_6l
+        0xb6 => { hlfrob!(hl, hl & !(1 << 6)); 4 }                  // set_6hlm
+        0xb7 => { r.a &= !(1 << 6); 2 }                             // res_6a
+        0xb8 => { r.b &= !(1 << 7); 2 }                             // res_7b
+        0xb9 => { r.c &= !(1 << 7); 2 }                             // res_7c
+        0xba => { r.d &= !(1 << 7); 2 }                             // res_7d
+        0xbb => { r.e &= !(1 << 7); 2 }                             // res_7e
+        0xbc => { r.h &= !(1 << 7); 2 }                             // res_7h
+        0xbd => { r.l &= !(1 << 7); 2 }                             // res_7l
+        0xbe => { hlfrob!(hl, hl & !(1 << 7)); 4 }                  // set_7hlm
+        0xbf => { r.a &= !(1 << 7); 2 }                             // res_7a
+
+        0xc0 => { r.b |= (1 << 0); 2 }                              // set_0b
+        0xc1 => { r.c |= (1 << 0); 2 }                              // set_0c
+        0xc2 => { r.d |= (1 << 0); 2 }                              // set_0d
+        0xc3 => { r.e |= (1 << 0); 2 }                              // set_0e
+        0xc4 => { r.h |= (1 << 0); 2 }                              // set_0h
+        0xc5 => { r.l |= (1 << 0); 2 }                              // set_0l
+        0xc6 => { hlfrob!(hl, hl | (1 << 0)); 4 }                   // set_0hlm
+        0xc7 => { r.a |= (1 << 0); 2 }                              // set_0a
+        0xc8 => { r.b |= (1 << 1); 2 }                              // set_1b
+        0xc9 => { r.c |= (1 << 1); 2 }                              // set_1c
+        0xca => { r.d |= (1 << 1); 2 }                              // set_1d
+        0xcb => { r.e |= (1 << 1); 2 }                              // set_1e
+        0xcc => { r.h |= (1 << 1); 2 }                              // set_1h
+        0xcd => { r.l |= (1 << 1); 2 }                              // set_1l
+        0xce => { hlfrob!(hl, hl | (1 << 1)); 4 }                   // set_1hlm
+        0xcf => { r.a |= (1 << 1); 2 }                              // set_1a
+
+        0xd0 => { r.b |= (1 << 2); 2 }                              // set_2b
+        0xd1 => { r.c |= (1 << 2); 2 }                              // set_2c
+        0xd2 => { r.d |= (1 << 2); 2 }                              // set_2d
+        0xd3 => { r.e |= (1 << 2); 2 }                              // set_2e
+        0xd4 => { r.h |= (1 << 2); 2 }                              // set_2h
+        0xd5 => { r.l |= (1 << 2); 2 }                              // set_2l
+        0xd6 => { hlfrob!(hl, hl | (1 << 2)); 4 }                   // set_2hlm
+        0xd7 => { r.a |= (1 << 2); 2 }                              // set_2a
+        0xd8 => { r.b |= (1 << 3); 2 }                              // set_3b
+        0xd9 => { r.c |= (1 << 3); 2 }                              // set_3c
+        0xda => { r.d |= (1 << 3); 2 }                              // set_3d
+        0xdb => { r.e |= (1 << 3); 2 }                              // set_3e
+        0xdc => { r.h |= (1 << 3); 2 }                              // set_3h
+        0xdd => { r.l |= (1 << 3); 2 }                              // set_3l
+        0xde => { hlfrob!(hl, hl | (1 << 3)); 4 }                   // set_3hlm
+        0xdf => { r.a |= (1 << 3); 2 }                              // set_3a
+
+        0xe0 => { r.b |= (1 << 4); 2 }                              // set_4b
+        0xe1 => { r.c |= (1 << 4); 2 }                              // set_4c
+        0xe2 => { r.d |= (1 << 4); 2 }                              // set_4d
+        0xe3 => { r.e |= (1 << 4); 2 }                              // set_4e
+        0xe4 => { r.h |= (1 << 4); 2 }                              // set_4h
+        0xe5 => { r.l |= (1 << 4); 2 }                              // set_4l
+        0xe6 => { hlfrob!(hl, hl | (1 << 4)); 4 }                   // set_4hlm
+        0xe7 => { r.a |= (1 << 4); 2 }                              // set_4a
+        0xe8 => { r.b |= (1 << 5); 2 }                              // set_5b
+        0xe9 => { r.c |= (1 << 5); 2 }                              // set_5c
+        0xea => { r.d |= (1 << 5); 2 }                              // set_5d
+        0xeb => { r.e |= (1 << 5); 2 }                              // set_5e
+        0xec => { r.h |= (1 << 5); 2 }                              // set_5h
+        0xed => { r.l |= (1 << 5); 2 }                              // set_5l
+        0xee => { hlfrob!(hl, hl | (1 << 5)); 4 }                   // set_5hlm
+        0xef => { r.a |= (1 << 5); 2 }                              // set_5a
+
+        0xf0 => { r.b |= (1 << 6); 2 }                              // set_6b
+        0xf1 => { r.c |= (1 << 6); 2 }                              // set_6c
+        0xf2 => { r.d |= (1 << 6); 2 }                              // set_6d
+        0xf3 => { r.e |= (1 << 6); 2 }                              // set_6e
+        0xf4 => { r.h |= (1 << 6); 2 }                              // set_6h
+        0xf5 => { r.l |= (1 << 6); 2 }                              // set_6l
+        0xf6 => { hlfrob!(hl, hl | (1 << 6)); 4 }                   // set_6hlm
+        0xf7 => { r.a |= (1 << 6); 2 }                              // set_6a
+        0xf8 => { r.b |= (1 << 7); 2 }                              // set_7b
+        0xf9 => { r.c |= (1 << 7); 2 }                              // set_7c
+        0xfa => { r.d |= (1 << 7); 2 }                              // set_7d
+        0xfb => { r.e |= (1 << 7); 2 }                              // set_7e
+        0xfc => { r.h |= (1 << 7); 2 }                              // set_7h
+        0xfd => { r.l |= (1 << 7); 2 }                              // set_7l
+        0xfe => { hlfrob!(hl, hl | (1 << 7)); 4 }                   // set_7hlm
+        0xff => { r.a |= (1 << 7); 2 }                              // set_7a
+
+        _ => 0
+    }
+}
