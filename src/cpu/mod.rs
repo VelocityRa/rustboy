@@ -246,15 +246,16 @@ impl Cpu {
 
 			//println!("{} {}", self.regs.pc, pc_before);
 
-			match self.regs.pc as i32 - pc_before as i32 {
-				1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
-				2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
-					pc_before, op, mem.rb(pc_before + 1)),
-				3 => println!("[0x{:08X}] 0x{:02X} 0x{:02X} 0x{:02X}",
-					pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
-				_ => println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
+			if op != 0x00 {
+				match self.regs.pc as i32 - pc_before as i32 {
+					1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
+					2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
+						pc_before, op, mem.rb(pc_before + 1)),
+					3 => println!("[0x{:08X}] 0x{:02X} 0x{:02X} 0x{:02X}",
+						pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
+					_ => {}//println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
+				};
 			};
-
 			if self.regs.stop {self.stop();}
 			self.total_cycles += time * 4;
 

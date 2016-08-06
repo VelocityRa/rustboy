@@ -39,7 +39,14 @@ impl Emulator {
 
 	// Render screen
 	pub fn render(&mut self, args: &RenderArgs) {
-		//use graphics::*;
+		use graphics::*;
+
+		const BG: [f32; 4] = [0.15, 0.15, 0.15, 1.0];
+
+        self.gl.draw(args.viewport(), |c, gl| {
+            // Clear the screen.
+            clear(BG, gl);
+        });
 	}
 
 	// Update state
@@ -128,9 +135,10 @@ impl CartridgeHeader {
 		use std::str;
 
 		String::from(
-			str::from_utf8(
-				&self.game_title
-			).unwrap()
+			match str::from_utf8(&self.game_title) {
+				Ok(val) => val,
+				Err(err) => "",
+			}
 		)
 	}
 }
