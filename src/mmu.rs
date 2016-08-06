@@ -141,7 +141,7 @@ impl Memory {
 		match addr {
 			0x0000 ... 0x3FFF => self.rom_loaded[addr as u16 as usize],
 			// TODO: Memory bank switching
-			0x4000 ... 0x7FFF => self.rom_loaded[addr as u16 as usize],
+			0x4000 ... 0x7FFF => panic!("Bank switching unimplemented"), // self.rom_loaded[addr as u16 as usize],
 			0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000),	// Mirrored memory
 			0xFEA0 ... 0xFEFF => panic!("Unusable memory accessed"),
 			0xFF00 ... 0xFF79 => self.ioreg_rb(addr),
