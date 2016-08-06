@@ -63,7 +63,9 @@ fn main() {
 		}
 
 		if let Some(u) = evt.update_args() {
-			emu.update(&u);
+			if emu.is_running() {
+				emu.update(&u);
+			}
 		}
 	}
 }

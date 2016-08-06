@@ -18,7 +18,6 @@ pub struct Emulator {
 	pub mem: Memory,
 	pub gl: GlGraphics,			// OpenGL drawing backend
 	pub rom_header: CartridgeHeader,
-	pub is_running: bool,
 }
 
 impl Emulator {
@@ -28,7 +27,6 @@ impl Emulator {
 			mem: Memory::new(),
 			gl: GlGraphics::new(OPENGL),
 			rom_header: Default::default(),
-			is_running: true,
 		};
 
 		// Read rom and move ownership to memory component
@@ -64,6 +62,10 @@ impl Emulator {
 		self.cpu.update_timers(&mut self.mem);
 	}
 */
+	#[inline]
+	pub fn is_running(&self) -> bool {
+		self.cpu.is_running
+	}
 }
 
 fn open_rom<P: AsRef<Path>>(rom_path: P) -> io::Result< Vec<u8> > {

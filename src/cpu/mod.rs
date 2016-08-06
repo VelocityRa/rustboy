@@ -73,8 +73,9 @@ impl Registers {
         match self.delay {
             1 => { self.delay = 0; self.ime = 1; }
             2 => { self.delay = 1; }
-            _ => {}
+            _ => return
         }
+		debug!("Interrupt delay: {}", self.delay);
     }
 
     // Schedule enabling of interrupts
@@ -112,6 +113,7 @@ impl Registers {
 	fn ret(&mut self, m: &Memory) {
 		self.pc = m.rw(self.sp);
 		self.sp += 2;
+		debug!("RET to {:04X}", self.pc);
 	}
 
 
@@ -158,6 +160,8 @@ pub struct Cpu {
 	regs: Registers,
 	timer: Timer,
 	total_cycles: u32,
+
+	pub is_running: bool,
 }
 
 impl Cpu {
@@ -166,6 +170,7 @@ impl Cpu {
 			regs: Default::default(),
 			timer: Timer::new(),
 			total_cycles: 0,
+			is_running: true,
 		};
 		cpu.reset_state();
 		cpu
@@ -242,7 +247,7 @@ impl Cpu {
 			self.regs.pc += 1;
 			
 			// Execute instruction
-			let time = instructions::exec(op, &mut self.regs, mem);
+			let cycles = instructions::exec(op, &mut self.regs, mem);
 
 			//println!("{} {}", self.regs.pc, pc_before);
 
@@ -256,8 +261,9 @@ impl Cpu {
 					_ => {}//println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
 				};
 			};
-			if self.regs.stop {self.stop();}
-			self.total_cycles += time * 4;
+			
+			if self.regs.stop {self.stop(); return}
+			self.total_cycles += cycles * 4;
 
 			//debug!("Cycles: {}", self.total_cycles);
 
