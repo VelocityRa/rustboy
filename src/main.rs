@@ -1,7 +1,8 @@
 extern crate piston;
 extern crate graphics;
-extern crate glutin_window;
+extern crate sdl2_window;
 extern crate opengl_graphics;
+extern crate gfx_debug_draw;
 
 use std::env;
 
@@ -9,7 +10,7 @@ use piston::event_loop::*;
 use piston::input::*;
 use piston::window::WindowSettings;
 use piston::window::AdvancedWindow;
-use glutin_window::GlutinWindow as Window;
+use sdl2_window::Sdl2Window as Window;
 use opengl_graphics::*;
 
 #[macro_use]
@@ -21,12 +22,14 @@ mod mmu;
 mod emulator;
 mod timer;
 
+const SCREEN_NATIVE_DIMS: [u32; 2] = [160, 144];
+const SCREEN_MULT: u32 = 3;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
 fn main() {
-
+	
 	let args: Vec<_> = env::args().collect();
 	let rom_path: &String;
 
@@ -36,10 +39,13 @@ fn main() {
 				USAGE: rustboy <path/to/rom>"),
 	}
 
+	const SCREEN_DIMS: [u32; 2] = [SCREEN_NATIVE_DIMS[0] * SCREEN_MULT, 
+		SCREEN_NATIVE_DIMS[1] * SCREEN_MULT];
+
 	let mut window: Window = 
 		WindowSettings::new(
 			WINDOW_TITLE,
-			[640, 480]
+			SCREEN_DIMS,
 		)
 		.opengl(OPENGL)
 		.exit_on_esc(true)
@@ -54,6 +60,8 @@ fn main() {
 	window.set_title(
 		format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
 		);
+
+	// 
 
 	// Main Event Loop
 	let mut events = window.events().max_fps(60).ups(60);

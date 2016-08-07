@@ -7,5 +7,6 @@ authors = ["VelocityRa <makren67@gmail.com>"]
 [dependencies]
 piston = "0.24.0"
 piston2d-graphics = "0.16.0"
-pistoncore-glutin_window = "0.28.0"
+pistoncore-sdl2_window = "*"
 piston2d-opengl_graphics = "0.31.0"
+gfx_debug_draw = "0.10.0"
