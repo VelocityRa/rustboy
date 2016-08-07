@@ -89,7 +89,7 @@ impl Registers {
     }
 
     pub fn di(&mut self) {
-    	info!("Disable interrupts, before delay was {}", self.delay);
+    	info!("Disable interrupts");
         self.ime = 0;
         self.delay = 0;
     }
@@ -116,6 +116,24 @@ impl Registers {
 		debug!("RET to {:04X}", self.pc);
 	}
 
+	fn inc_hlm(&mut self, m: &mut Memory) {
+		self.f.n.unset();
+		let hl = self.hl();
+		let v = m.rb(hl) + 1;
+		m.wb(hl, v);
+		if v == 0 {self.f.z.set()} else {self.f.z.unset()};
+		if v & 0xF == 0 {self.f.h.set()} else {self.f.h.unset()};
+	}
+
+	fn dec_hlm(&mut self, m: &mut Memory) {
+		self.f.n.set();
+		let hl = self.hl();
+		let v = m.rb(hl) - 1;
+		m.wb(hl, v);
+		if v == 0 {self.f.z.set()} else {self.f.z.unset()};
+		if v & 0xF == 0xF {self.f.h.set()} else {self.f.h.unset()};
+	}
+
 
 }
 
@@ -137,6 +155,10 @@ impl Flag {
 	pub fn toggle(&mut self) {
 		self.value = !self.value;
 	}
+	#[inline]
+	pub fn set_if(&mut self, cond: bool) {
+		if cond {self.set()} else {self.unset()};
+	}
 }
 
 // Set everything to zero/false
@@ -153,6 +175,15 @@ pub struct Flags {
 	unused2: bool,	// Unused (always 0)
 	unused3: bool,	// Unused (always 0)
 	unused4: bool,	// Unused (always 0)
+}
+
+impl Flags {
+	pub fn reset(&mut self) {
+		self.z.unset();
+		self.n.unset();
+		self.h.unset();
+		self.c.unset();
+	}
 }
 
 

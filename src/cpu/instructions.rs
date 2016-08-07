@@ -104,9 +104,71 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
 	macro_rules! xor_a (
 	($val:expr) => ({
-		r.a ^= val;
+		r.a ^= $val;
+		r.f.reset();
 		if r.a == 0 {r.f.z.set()};
 	4 }) );
+
+	macro_rules! or_a (
+	($val:expr) => ({
+		r.a |= $val;
+		r.f.reset();
+		if r.a == 0 {r.f.z.set()};
+	4 }) );
+
+	macro_rules! and_a (
+	($val:expr) => ({
+		r.a &= $val;
+		r.f.n.unset();
+		r.f.h.set();
+		r.f.z.unset();
+		if r.a == 0 {r.f.z.set()};
+	4 }) );
+
+	macro_rules! cp_a (
+	($val:expr) => ({
+		let v = $val;
+		r.f.n.set();
+		if r.a == v {r.f.z.set()} else {r.f.z.unset()};
+		if r.a < v {r.f.c.set()} else {r.f.c.unset()};
+		if (r.a & 0xF) < (v & 0xF) {r.f.h.set()} else {r.f.h.unset()};
+	4 }) );
+
+	macro_rules! rlc (
+	($reg:ident, $n:expr) => ({
+		r.f.n.unset();
+		r.f.h.unset();
+		r.f.z.unset();
+		r.$reg.rotate_left($n);
+		if r.$reg & 0x1 == 1 {r.f.c.set()} else {r.f.c.unset()}
+	4 }) );
+
+	macro_rules! rrc (
+	($reg:ident, $n:expr) => ({
+		r.f.n.unset();
+		r.f.h.unset();
+		r.f.z.unset();
+		r.$reg.rotate_right($n);
+		if r.$reg & 0x80 == 1 {r.f.c.set()} else {r.f.c.unset()}
+	4 }) );
+
+	macro_rules! add_hl( ($reg:expr) => ({
+		let a = r.hl() as u32;
+		let b = $reg as u32;
+		let hl = a + b;
+		r.f.n.unset();
+		r.f.c.set_if(hl > 0xffff);
+		r.f.h.set_if((a as u32 & 0xfff) > (hl & 0xfff));
+		r.l = hl as u8;
+		r.h = (hl >> 8) as u8;
+	2 }) );
+
+	// TODO: use set_or_else for everything
+
+	// macro_rules! rl (
+	
+	// 	)
+
 
 	// if inst != 0 {
 	// 	info!("Decoding {:02X}", inst);
@@ -124,18 +186,17 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x04 => inc!(b),                                            // inc_b
         0x05 => dec!(b),                                            // dec_b
         0x06 => ld_n!(b),                                           // ld_bn
-        // 0x07 => rlc!(r.a, 1),                                       // rlca
+        0x07 => rlc!(a, 1),                                         // rlca
         0x08 => { let a = m.rw(r.pc); m.ww(a, r.sp); r.pc += 2; 5 } // ld_nnsp
-        // 0x09 => add_hl!(r.bc()),                                    // add_hlbc
+        0x09 => add_hl!(r.bc()),                                    // add_hlbc
         0x0a => { r.a = m.rb(r.bc()); 2 }                           // ld_abc
         0x0b => dec_16!(b, c),                                      // dec_bc
         0x0c => inc!(c),                                            // inc_c
         0x0d => dec!(c),                                            // dec_c
         0x0e => ld_n!(c),                                           // ld_cn
-        // 0x0f => rrc!(r.a, 1),                                       // rrca
+        0x0f => rrc!(a, 1),                                         // rrca
 
-        // TODO: Handle STOP
-        0x10 => { r.stop = true; 1}                                   // stop
+        0x10 => { r.stop = true; 1}                                 // stop
         0x11 => ld_nn!(d, e),                                       // ld_denn
         0x12 => { m.wb(r.de(), r.a); 2 }                            // ld_dea
         0x13 => inc_16!(d, e),                                      // inc_de
@@ -144,7 +205,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x16 => ld_n!(d),                                           // ld_dn
         // 0x17 => rl!(r.a, 1),                                        // rla
         0x18 => jr!(),                                              // jr_n
-        // 0x19 => add_hl!(r.de()),                                    // add_hlde
+        0x19 => add_hl!(r.de()),                                    // add_hlde
         0x1a => { r.a = m.rb(r.de()); 2 }                           // ld_ade
         0x1b => dec_16!(d, e),                                      // dec_de
         0x1c => inc!(e),                                            // inc_e
@@ -152,7 +213,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x1e => ld_n!(e),                                           // ld_en
         // 0x1f => rr!(r.a, 1),                                        // rr_a
 
-        0x20 => jr_n!(!r.f.z.get()),                              // jr_nz_n
+        0x20 => jr_n!(!r.f.z.get()),                                // jr_nz_n
         0x21 => ld_nn!(h, l),                                       // ld_hlnn
         0x22 => { m.wb(r.hl(), r.a); r.hlpp(); 2 },                 // ld_hlma
         0x23 => inc_16!(h, l),                                      // inc_hl
@@ -160,8 +221,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x25 => dec!(h),                                            // dec_h
         0x26 => ld_n!(h),                                           // ld_hn
         // 0x27 => { daa(r); 1 },                                      // daa
-        0x28 => jr_n!(r.f.z.get()),                              // jr_z_n
-        // 0x29 => add_hl!(r.hl()),                                    // add_hlhl
+        0x28 => jr_n!(r.f.z.get()),                                 // jr_z_n
+        0x29 => add_hl!(r.hl()),                                    // add_hlhl
         0x2a => { r.a = m.rb(r.hl()); r.hlpp(); 2 },                // ldi_ahlm
         0x2b => dec_16!(h, l),                                      // dec_hl
         0x2c => inc!(l),                                            // inc_l
@@ -170,16 +231,16 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x2f => { r.a ^= 0xff; 
         	r.f.n.set(); r.f.h.set(); 1 }                    // cpl
 
-        0x30 => jr_n!(!r.f.c.get()),                              // jr_nc_n
+        0x30 => jr_n!(!r.f.c.get()),                                // jr_nc_n
         0x31 => { r.sp = m.rw(r.pc); r.pc += 2; 3 } // ld_spnn
         0x32 => { m.wb(r.hl(), r.a); r.hlmm(); 2 }                  // ldd_hlma
         0x33 => { r.sp += 1; 2 }                                    // inc_sp
-        // 0x34 => { inc_hlm(r, m); 3 }                                // inc_hlm
-        // 0x35 => { dec_hlm(r, m); 3 }                                // dec_hlm
+        0x34 => { r.inc_hlm(m); 3 }                                 // inc_hlm
+        0x35 => { r.dec_hlm(m); 3 }                                 // dec_hlm
         0x36 => { let pc = m.rb(r.bump()); m.wb(r.hl(), pc); 3 }    // ld_hlmn
         0x37 => { r.f.n.unset(); r.f.h.unset(); 
         	r.f.c.set(); 1 }                          // scf
-        0x38 => jr_n!(r.f.c.get()),                              // jr_c_n
+        0x38 => jr_n!(r.f.c.get()),                                 // jr_c_n
         // 0x39 => { add_hlsp(r); 2 }                                  // add_hlsp
         0x3a => { r.a = m.rb(r.hl()); r.hlmm(); 2 }                 // ldd_ahlm
         0x3b => { r.sp -= 1; 2 }                                    // dec_sp
@@ -290,39 +351,39 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0x9e => { sbc_a!(m.rb(r.hl())); 2 }                         // sbc_ahlm
         // 0x9f => sbc_a!(r.a),                                        // sbc_aa
 
-        // 0xa0 => and_a!(r.b),                                        // and_ab
-        // 0xa1 => and_a!(r.c),                                        // and_ac
-        // 0xa2 => and_a!(r.d),                                        // and_ad
-        // 0xa3 => and_a!(r.e),                                        // and_ae
-        // 0xa4 => and_a!(r.h),                                        // and_ah
-        // 0xa5 => and_a!(r.l),                                        // and_al
-        // 0xa6 => { and_a!(m.rb(r.hl())); 2 }                         // and_ahlm
-        // 0xa7 => and_a!(r.a),                                        // and_aa
-        // 0xa8 => xor_a!(r.b),                                        // xor_ab
-        // 0xa9 => xor_a!(r.c),                                        // xor_ac
-        // 0xaa => xor_a!(r.d),                                        // xor_ad
-        // 0xab => xor_a!(r.e),                                        // xor_ae
-        // 0xac => xor_a!(r.h),                                        // xor_ah
-        // 0xad => xor_a!(r.l),                                        // xor_al
-        // 0xae => { xor_a!(m.rb(r.hl())); 2 }                         // xor_ahlm
-        // 0xaf => xor_a!(r.a),                                        // xor_aa
+        0xa0 => and_a!(r.b),                                        // and_ab
+        0xa1 => and_a!(r.c),                                        // and_ac
+        0xa2 => and_a!(r.d),                                        // and_ad
+        0xa3 => and_a!(r.e),                                        // and_ae
+        0xa4 => and_a!(r.h),                                        // and_ah
+        0xa5 => and_a!(r.l),                                        // and_al
+        0xa6 => { and_a!(m.rb(r.hl())); 2 }                         // and_ahlm
+        0xa7 => and_a!(r.a),                                        // and_aa
+        0xa8 => xor_a!(r.b),                                        // xor_ab
+        0xa9 => xor_a!(r.c),                                        // xor_ac
+        0xaa => xor_a!(r.d),                                        // xor_ad
+        0xab => xor_a!(r.e),                                        // xor_ae
+        0xac => xor_a!(r.h),                                        // xor_ah
+        0xad => xor_a!(r.l),                                        // xor_al
+        0xae => { xor_a!(m.rb(r.hl())); 2 }                         // xor_ahlm
+        0xaf => xor_a!(r.a),                                        // xor_aa
 
-        // 0xb0 => or_a!(r.b),                                         // or_ab
-        // 0xb1 => or_a!(r.c),                                         // or_ac
-        // 0xb2 => or_a!(r.d),                                         // or_ad
-        // 0xb3 => or_a!(r.e),                                         // or_ae
-        // 0xb4 => or_a!(r.h),                                         // or_ah
-        // 0xb5 => or_a!(r.l),                                         // or_al
-        // 0xb6 => { or_a!(m.rb(r.hl())); 2 }                          // or_ahlm
-        // 0xb7 => or_a!(r.a),                                         // or_aa
-        // 0xb8 => cp_a!(r.b),                                         // cp_ab
-        // 0xb9 => cp_a!(r.c),                                         // cp_ac
-        // 0xba => cp_a!(r.d),                                         // cp_ad
-        // 0xbb => cp_a!(r.e),                                         // cp_ae
-        // 0xbc => cp_a!(r.h),                                         // cp_ah
-        // 0xbd => cp_a!(r.l),                                         // cp_al
-        // 0xbe => { cp_a!(m.rb(r.hl())); 2 }                          // cp_ahlm
-        // 0xbf => cp_a!(r.a),                                         // cp_aa
+        0xb0 => or_a!(r.b),                                         // or_ab
+        0xb1 => or_a!(r.c),                                         // or_ac
+        0xb2 => or_a!(r.d),                                         // or_ad
+        0xb3 => or_a!(r.e),                                         // or_ae
+        0xb4 => or_a!(r.h),                                         // or_ah
+        0xb5 => or_a!(r.l),                                         // or_al
+        0xb6 => { or_a!(m.rb(r.hl())); 2 }                          // or_ahlm
+        0xb7 => or_a!(r.a),                                         // or_aa
+        0xb8 => cp_a!(r.b),                                         // cp_ab
+        0xb9 => cp_a!(r.c),                                         // cp_ac
+        0xba => cp_a!(r.d),                                         // cp_ad
+        0xbb => cp_a!(r.e),                                         // cp_ae
+        0xbc => cp_a!(r.h),                                         // cp_ah
+        0xbd => cp_a!(r.l),                                         // cp_al
+        0xbe => { cp_a!(m.rb(r.hl())); 2 }                          // cp_ahlm
+        0xbf => cp_a!(r.a),                                         // cp_aa
 
         0xc0 => ret_if!(!r.f.z.get()),                            // ret_nz
         // 0xc1 => pop!(b, c),                                         // pop_bc
@@ -364,7 +425,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xe3 => xx(),                                               // xx
         0xe4 => xx(),                                               // xx
         // 0xe5 => push!(h, l),                                        // push_hl
-        // 0xe6 => { and_a!(m.rb(r.bump())); 2 }                       // and_an
+        0xe6 => { and_a!(m.rb(r.bump())); 2 }                       // and_an
         0xe7 => rst!(0x20),                                         // rst_20
         // 0xe8 => { add_spn(r, m); 4 }                                // add_spn
         0xe9 => { r.pc = r.hl(); 1 }                                // jp_hl
@@ -372,16 +433,16 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xeb => xx(),                                               // xx
         0xec => xx(),                                               // xx
         0xed => xx(),                                               // xx
-        // 0xee => { xor_a!(m.rb(r.bump())); 2 }                       // xor_an
+        0xee => { xor_a!(m.rb(r.bump())); 2 }                       // xor_an
         0xef => rst!(0x28),                                         // rst_28
 
         0xf0 => { r.a = m.rb(0xff00 | (m.rb(r.bump()) as u16)); 3 } // ld_aIOn
         // 0xf1 => { pop_af(r, m); 3 }                                 // pop_af
-        // 0xf2 => { r.a = m.rb(0xff00 | (r.c as u16)); 2 }            // ld_aIOc
+        0xf2 => { r.a = m.rb(0xff00 | (r.c as u16)); 2 }            // ld_aIOc
         0xf3 => { r.di(); 1 }                                       // di
         0xf4 => xx(),                                               // xx
         // 0xf5 => push!(a, f),                                        // push_af
-        // 0xf6 => { or_a!(m.rb(r.bump())); 2 }                        // or_an
+        0xf6 => { or_a!(m.rb(r.bump())); 2 }                        // or_an
         0xf7 => rst!(0x30),                                         // rst_30
         // 0xf8 => { ld_hlspn(r, m); 3 }                               // ld_hlspn
         0xf9 => { r.sp = r.hl(); 2 }                                // ld_sphl
@@ -389,7 +450,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xfb => { r.ei(m); 1 }                                      // ei
         0xfc => xx(),                                               // xx
         0xfd => xx(),                                               // xx
-        // 0xfe => { cp_a!(m.rb(r.bump())); 2 }                        // cp_an
+        0xfe => { cp_a!(m.rb(r.bump())); 2 }                        // cp_an
         0xff => rst!(0x38),                                         // rst_38
 
         _ => {
