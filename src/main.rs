@@ -1,17 +1,28 @@
 extern crate piston;
 extern crate graphics;
-extern crate sdl2_window;
-extern crate opengl_graphics;
+extern crate glutin_window;
+extern crate gfx_graphics;
+extern crate gfx;
+extern crate gfx_core;
 extern crate gfx_debug_draw;
+extern crate gfx_text;
+extern crate gfx_device_gl;
+extern crate piston_window;
 
 use std::env;
+use std::borrow::BorrowMut;
 
-use piston::event_loop::*;
-use piston::input::*;
-use piston::window::WindowSettings;
-use piston::window::AdvancedWindow;
-use sdl2_window::Sdl2Window as Window;
-use opengl_graphics::*;
+use glutin_window::GlutinWindow;
+
+use piston_window::*;
+
+use gfx::traits::*;
+use gfx_core::factory::Typed;
+use gfx::format::{DepthStencil, Formatted, Srgba8};
+
+use gfx_core::Resources;
+use gfx_graphics::Gfx2d;
+use gfx_debug_draw::DebugRenderer;
 
 #[macro_use]
 mod logger;
@@ -42,15 +53,16 @@ fn main() {
 	const SCREEN_DIMS: [u32; 2] = [SCREEN_NATIVE_DIMS[0] * SCREEN_MULT, 
 		SCREEN_NATIVE_DIMS[1] * SCREEN_MULT];
 
-	let mut window: Window = 
+	let mut window: PistonWindow<GlutinWindow> = 
 		WindowSettings::new(
 			WINDOW_TITLE,
 			SCREEN_DIMS,
 		)
 		.opengl(OPENGL)
-		.exit_on_esc(true)
 		.build()
 		.unwrap();
+	window.set_max_fps(60);
+	window.set_ups(60);
 
 	let mut emu = emulator::Emulator::new(rom_path);
 
@@ -61,18 +73,39 @@ fn main() {
 		format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
 		);
 
-	// 
+    let mut debug_renderer = {
+        let text_renderer = {
+            gfx_text::new(window.factory.clone()).unwrap()
+        };
+        DebugRenderer::new(window.factory.clone(), text_renderer, 64).ok().unwrap()
+    };
 
 	// Main Event Loop
-	let mut events = window.events().max_fps(60).ups(60);
-	'main_loop: while let Some(evt) = events.next(&mut window) {
+	while let Some(evt) = window.next() {
 		if let Some(r) = evt.render_args() {
-			emu.render(&r);
+			use graphics::*;
+
+			const BG: [f32; 4] = [0.15, 0.15, 0.15, 1.0];
+
+	        window.draw_2d(&evt, |c, g| {
+            	clear(BG, g);
+
+	            debug_renderer.draw_text_at_position(
+                "Test",
+                [6.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 1.0],
+
+            );
+
+            debug_renderer.draw_line([0.2, 0.2, 0.0], [0.0, 0.0, 5.0], [0.3, 0.3, 1.0, 1.0]);
+        	});
+
+			//emu.render(&r);
 		}
 
 		if let Some(u) = evt.update_args() {
 			if emu.is_running() {
-				emu.update(&u);
+				//emu.update(&u);
 			}
 		}
 	}

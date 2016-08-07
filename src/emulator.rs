@@ -1,5 +1,5 @@
-use opengl_graphics::*;
 use piston::input::*;
+use glutin_window::OpenGL;
 
 use std::error::Error;
 use std::fs::File;
@@ -7,6 +7,10 @@ use std::io::prelude::*;
 use std::io;
 use std::fmt;
 use std::path::Path;
+use std::os::raw;
+use std::borrow::BorrowMut;
+
+use graphics::draw_state::Blend;
 
 use cpu::Cpu;
 use mmu::Memory;
@@ -16,17 +20,19 @@ const OPENGL: OpenGL = OpenGL::V3_2;
 pub struct Emulator {
 	pub cpu: Cpu,
 	pub mem: Memory,
-	pub gl: GlGraphics,			// OpenGL drawing backend
 	pub rom_header: CartridgeHeader,
+	//pub g2d: Gfx2d<gfx_device_gl::Resources>,			// Drawing backend
+
 }
 
 impl Emulator {
 	pub fn new(rom_path: &String) -> Emulator {
+
 		let mut emu = Emulator {
 			cpu: Cpu::new(),
 			mem: Memory::new(),
-			gl: GlGraphics::new(OPENGL),
 			rom_header: Default::default(),
+			//g2d: Gfx2d::new(OPENGL, &mut factory),
 		};
 
 		// Read rom and move ownership to memory component
@@ -37,14 +43,7 @@ impl Emulator {
 
 	// Render screen
 	pub fn render(&mut self, args: &RenderArgs) {
-		use graphics::*;
 
-		const BG: [f32; 4] = [0.15, 0.15, 0.15, 1.0];
-
-        self.gl.draw(args.viewport(), |c, gl| {
-            // Clear the screen.
-            clear(BG, gl);
-        });
 	}
 
 	// Update state
