@@ -6,6 +6,8 @@
 
 pub mod instructions;
 
+use std::fmt;
+
 use mmu::Memory;
 use timer::Timer;
 
@@ -133,9 +135,31 @@ impl Registers {
 		if v == 0 {self.f.z.set()} else {self.f.z.unset()};
 		if v & 0xF == 0xF {self.f.h.set()} else {self.f.h.unset()};
 	}
-
-
 }
+
+impl fmt::Debug for Registers {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "PC: {:04X}  SP: {:04X}
+			A: {:02X}
+			B: {:02X}  AB: {:04X}
+			C: {:02X}
+			D: {:02X}  DE: {:04X}
+			E: {:02X}
+			H: {:02X}  HL: {:04X}
+			L: {:02X}
+			",
+			self.pc, self.sp,
+			self.a,
+			self.b, self.bc(),
+			self.d,
+			self.e, self.de(),
+			self.h,
+			self.l, self.hl(),
+			self.l,
+		)
+	}
+}
+
 
 #[derive(Default)]
 pub struct Flag {
@@ -159,6 +183,10 @@ impl Flag {
 	pub fn set_if(&mut self, cond: bool) {
 		if cond {self.set()} else {self.unset()};
 	}
+}
+
+impl fmt::Display for Flag {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.value) }
 }
 
 // Set everything to zero/false
@@ -187,12 +215,29 @@ impl Flags {
 }
 
 
+impl fmt::Debug for Flags {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "Z: {}
+			N: {}
+			H: {}
+			C: {}
+			",
+			self.z,
+			self.n,
+			self.h,
+			self.c,
+		)
+	}
+}
+
+
 pub struct Cpu {
 	regs: Registers,
 	timer: Timer,
 	total_cycles: u32,
 
 	pub is_running: bool,
+	pub is_stepping: bool
 }
 
 impl Cpu {
@@ -202,8 +247,12 @@ impl Cpu {
 			timer: Timer::new(),
 			total_cycles: 0,
 			is_running: true,
+			is_stepping: false,
 		};
 		cpu.reset_state();
+		// Runs for just 1 instruction every run() call (for debugging)
+		cpu.is_stepping = true;
+
 		cpu
 	}
 
@@ -296,6 +345,8 @@ impl Cpu {
 			if self.regs.stop {self.stop(); return}
 			self.total_cycles += cycles * 4;
 
+			if self.is_stepping { return; }
+
 			//debug!("Cycles: {}", self.total_cycles);
 
 		}
@@ -305,6 +356,17 @@ impl Cpu {
 		self.total_cycles = 0;
 	}
 }
+
+impl fmt::Debug for Cpu {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "State: {}
+			Cycles: {}",
+			if self.is_running {"Running"} else {"Paused"},
+			self.total_cycles,
+			)
+	}
+}
+
 
 //	======================================
 //	|               TESTS                |

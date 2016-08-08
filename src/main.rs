@@ -10,19 +10,13 @@ extern crate gfx_device_gl;
 extern crate piston_window;
 
 use std::env;
-use std::borrow::BorrowMut;
 
 use glutin_window::GlutinWindow;
 
 use piston_window::*;
 
-use gfx::traits::*;
-use gfx_core::factory::Typed;
-use gfx::format::{DepthStencil, Formatted, Srgba8};
-
 use gfx_core::Resources;
 use gfx_graphics::Gfx2d;
-use gfx_debug_draw::DebugRenderer;
 
 #[macro_use]
 mod logger;
@@ -38,6 +32,8 @@ const SCREEN_MULT: u32 = 3;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
+const BG_COLOR: [f32; 4] = [0.12, 0.12, 0.12, 1.0];
+const TEXT_COLOR: [f32; 4] = [1., 1., 1., 0.4];
 
 fn main() {
 	
@@ -61,8 +57,8 @@ fn main() {
 		.opengl(OPENGL)
 		.build()
 		.unwrap();
-	window.set_max_fps(60);
-	window.set_ups(60);
+	window.set_max_fps(5);
+	window.set_ups(5);
 
 	let mut emu = emulator::Emulator::new(rom_path);
 
@@ -73,39 +69,45 @@ fn main() {
 		format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
 		);
 
-    let mut debug_renderer = {
-        let text_renderer = {
-            gfx_text::new(window.factory.clone()).unwrap()
-        };
-        DebugRenderer::new(window.factory.clone(), text_renderer, 64).ok().unwrap()
-    };
+	let output_color = window.output_color.clone();
+
+	// Initialize text renderer.
+	let mut text = gfx_text::new(window.factory.clone())
+		.with_size(16)
+		.with_font("resources/fonts/joystix monospace.ttf")
+		.build().unwrap();
 
 	// Main Event Loop
 	while let Some(evt) = window.next() {
 		if let Some(r) = evt.render_args() {
-			use graphics::*;
 
-			const BG: [f32; 4] = [0.15, 0.15, 0.15, 1.0];
+			let mut dbg_string = format!("{:?}\n\n", emu.cpu);
 
-	        window.draw_2d(&evt, |c, g| {
-            	clear(BG, g);
+			dbg_string.push_str(&format!("Registers:\n{:?}\n", emu.cpu.get_regs()));
+			dbg_string.push_str(&format!("Flags:\n{:?}\n", emu.cpu.get_flags()));
+			
+			// Split lines and place them appropriately
+			// TODO: Possibly use anchors for text placement
+			let dbg_lines = dbg_string.split('\n');
+			for (line_n, line) in dbg_lines.enumerate() {
+				text.add(
+					line,
+					[10, 10 + line_n as i32 * 16 + 1],
+					TEXT_COLOR,
+				);
+			}
 
-	            debug_renderer.draw_text_at_position(
-                "Test",
-                [6.0, 0.0, 0.0],
-                [1.0, 0.0, 0.0, 1.0],
+			window.draw_2d(&evt, |c, g| {
+				clear(BG_COLOR, g);
 
-            );
-
-            debug_renderer.draw_line([0.2, 0.2, 0.0], [0.0, 0.0, 5.0], [0.3, 0.3, 1.0, 1.0]);
-        	});
-
+				text.draw(&mut g.encoder, &output_color);
+			});
+			
 			//emu.render(&r);
 		}
-
 		if let Some(u) = evt.update_args() {
 			if emu.is_running() {
-				//emu.update(&u);
+				emu.update(&u);
 			}
 		}
 	}

@@ -7,10 +7,6 @@ use std::io::prelude::*;
 use std::io;
 use std::fmt;
 use std::path::Path;
-use std::os::raw;
-use std::borrow::BorrowMut;
-
-use graphics::draw_state::Blend;
 
 use cpu::Cpu;
 use mmu::Memory;
@@ -21,8 +17,6 @@ pub struct Emulator {
 	pub cpu: Cpu,
 	pub mem: Memory,
 	pub rom_header: CartridgeHeader,
-	//pub g2d: Gfx2d<gfx_device_gl::Resources>,			// Drawing backend
-
 }
 
 impl Emulator {
@@ -32,7 +26,6 @@ impl Emulator {
 			cpu: Cpu::new(),
 			mem: Memory::new(),
 			rom_header: Default::default(),
-			//g2d: Gfx2d::new(OPENGL, &mut factory),
 		};
 
 		// Read rom and move ownership to memory component
@@ -49,7 +42,8 @@ impl Emulator {
 	// Update state
 	// Gets called once a frame
 	pub fn update(&mut self, args: &UpdateArgs) {
-		// Runs for a frame (~70k clock cycles)
+		// If is_stepping is false, runs for a frame (~70k clock cycles)
+		// If it's true runs for just 1 instruction
 		self.cpu.run(&mut self.mem);
 	}
 
