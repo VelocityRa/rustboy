@@ -17,8 +17,9 @@ impl Cpu {
 //	======================================
 
 pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
-
-	macro_rules! ld (
+    use std::num::Wrapping;
+	
+    macro_rules! ld (
 		($reg1:ident, $reg2:ident) => ({ r.$reg1 = r.$reg2;
 		1 }) );
 
@@ -36,7 +37,9 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 		() => ({
 			r.sp -= 2;
 			m.ww(r.sp, r.pc + 2);
-			r.pc = m.rw(r.pc);
+			let target = m.rw(r.pc);
+			debug!("CALL to {:04X}", target);
+			r.pc = target;
 		6 }) );
 
 	macro_rules! call_if (
@@ -48,7 +51,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 		2 }) );
 
 	macro_rules! jp (
-		() => ({println!("JP pc: {:04X} (pc):{:04X}", r.pc, m.rw(r.pc), ); r.pc = m.rw(r.pc);
+		() => ({debug!("JUMP to {:04X}", m.rw(r.pc));
+			r.pc = m.rw(r.pc);
 		4 }) );
 
 	macro_rules! jp_n (
@@ -56,7 +60,10 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 		3 }) );
 
 	macro_rules! jr (
-		() => ({r.pc = add_signed(r.pc, m.rb(r.bump()));
+		() => ({
+			let target = add_signed(r.pc, m.rb(r.bump()));
+			debug!("JUMP(REL) to {:04X}", target);
+			r.pc = target + 1;
 		3 }) );
 
 	macro_rules! jr_n {
@@ -65,7 +72,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
 	macro_rules! inc (
 		($reg:ident) => ({
-			r.$reg += 1;
+			r.$reg.wrapping_add(1);
 			if r.$reg == 0 {r.f.z.set()};
 			if r.$reg & 0xF == 0 {r.f.h.set()};
 		1 }) );
@@ -78,7 +85,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
 	macro_rules! dec (
 		($reg:ident) => ({
-			r.$reg -= 1;
+			r.$reg.wrapping_sub(1);
 			r.f.h.unset();
 			r.f.z.unset();
 			r.f.n.set();
@@ -132,6 +139,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 		if r.a == v {r.f.z.set()} else {r.f.z.unset()};
 		if r.a < v {r.f.c.set()} else {r.f.c.unset()};
 		if (r.a & 0xF) < (v & 0xF) {r.f.h.set()} else {r.f.h.unset()};
+        //debug!("{:02X} & 0xF < ({:2X} & 0xF)    c:{:?} h:{:?} ", r.a, v, r.f.c.get(),r.f.h.get());
 	4 }) );
 
 	macro_rules! rlc (
@@ -419,7 +427,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0xde => { sbc_a!(m.rb(r.bump())); 2 }                       // sbc_an
         0xdf => rst!(0x18),                                         // rst_18
 
-        // 0xe0 => { ld_IOan(r, m); 3 }                                // ld_IOan
+        0xe0 => {let n=m.rb(r.bump()); m.wb(0xFF00 | n as u16, r.a); 3 }// ld_IOan
         // 0xe1 => pop!(h, l),                                         // pop_hl
         0xe2 => { m.wb(0xFF00 | (r.c as u16), r.a); 2 }             // ld_IOca
         0xe3 => xx(),                                               // xx

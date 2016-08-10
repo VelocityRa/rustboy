@@ -1,5 +1,6 @@
 
 use cpu::Interrupt;
+use std::fmt;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -91,5 +92,19 @@ impl Timer {
                 self.clock.tima -= self.tima_speed;
             }
         }
+    }
+}
+
+
+impl fmt::Debug for Timer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "div: {}  c_div: {}\ntima: {}  c_tima: {}\ntma: {}\ntac: {}\ntima_speed: {}
+            ",
+            self.div, self.clock.div,
+            self.tima, self.clock.tima,
+            self.tma,
+            self.tac,
+            self.tima_speed,
+            )
     }
 }

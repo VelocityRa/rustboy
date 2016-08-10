@@ -99,16 +99,16 @@ impl Registers {
 	// Instructions
 
 	fn hlpp(&mut self) {
-		self.l += 1;
+		self.l.wrapping_add(1);
 		if self.l == 0 {
-			self.h += 1;
+			self.h.wrapping_add(1);
 		}
 	}
 
 	fn hlmm(&mut self) {
-		self.l -= 1;
+		self.l.wrapping_sub(1);
 		if self.l == 0xff {
-			self.h -= 1;
+			self.h.wrapping_sub(1);
 		}
 	}
 
@@ -141,7 +141,7 @@ impl fmt::Debug for Registers {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "PC: {:04X}  SP: {:04X}
 			A: {:02X}
-			B: {:02X}  AB: {:04X}
+			B: {:02X}  BC: {:04X}
 			C: {:02X}
 			D: {:02X}  DE: {:04X}
 			E: {:02X}
@@ -151,10 +151,10 @@ impl fmt::Debug for Registers {
 			self.pc, self.sp,
 			self.a,
 			self.b, self.bc(),
-			self.d,
-			self.e, self.de(),
-			self.h,
-			self.l, self.hl(),
+			self.c,
+			self.d, self.de(),
+			self.e,
+			self.h, self.hl(),
 			self.l,
 		)
 	}

@@ -31,6 +31,9 @@ impl Emulator {
 		// Read rom and move ownership to memory component
 		emu.mem.set_rom(try_open_rom(&rom_path));
 
+		// Give immutable reference of rom header to memory component
+		//emu.mem.borrow_rom_header(&emu.rom_header);
+
 		emu
 	}
 
@@ -50,6 +53,9 @@ impl Emulator {
 	pub fn read_header(&mut self) {
 		self.rom_header = read_header_impl(&self);
 	}
+	pub fn get_header(&self) -> &CartridgeHeader {
+		&self.rom_header
+	}
 /*
 	pub fn update_cpu_timers(&mut self, dt: f64) {
 		self.cpu.update_timers(&mut self.mem);
@@ -59,6 +65,13 @@ impl Emulator {
 	pub fn is_running(&self) -> bool {
 		self.cpu.is_running
 	}
+    pub fn set_running(&mut self, state: bool) {
+        self.cpu.is_running = state;
+    }
+    pub fn toggle_running(&mut self) {
+        self.cpu.is_running = !self.cpu.is_running;
+    }
+    
 }
 
 fn open_rom<P: AsRef<Path>>(rom_path: P) -> io::Result< Vec<u8> > {
@@ -169,7 +182,7 @@ pub struct CartridgeHeader {
 
 	// Specifies which Memory Bank Controller (if any) is used in the
 	// cartridge, and if further external hardware exists in the cartridge.
-	cartridge_type: u8,
+	pub cartridge_type: u8,
 
 	// Typically calculated as "32KB << N"
 	rom_size: u8,

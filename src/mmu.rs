@@ -25,6 +25,7 @@
 
 use cpu::Cpu;
 use timer::Timer;
+use emulator::CartridgeHeader;
 
 const START_MAPPED_MEM: usize = 0x8000;
 const MEM_SIZE: usize = 0xFFFF + 1 - START_MAPPED_MEM;
@@ -39,6 +40,8 @@ pub struct Memory {
 
 	pub rom_loaded: Vec<u8>,
 
+	//rom_header: Option<&CartridgeHeader>,
+
 	pub timer: Box<Timer>,
 }
 
@@ -51,6 +54,7 @@ impl Memory {
 			ie_: 0u8,
 			raw_mem: [0u8; MEM_SIZE],
 			rom_loaded: Vec::new(),
+			//rom_header: None,
 			timer: Box::new(Timer::new()),
 		};
 		mem.power_on();
@@ -82,7 +86,8 @@ impl Memory {
 		self.write_byte_raw(0xff26, 0xf1); // NR52
 		self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
 		self.write_byte_raw(0xff42, 0x00); // SCY
-		self.write_byte_raw(0xff43, 0x00); // SCX
+        self.write_byte_raw(0xff43, 0x00); // SCX
+        self.write_byte_raw(0xff44, 0x00); // LY
 		self.write_byte_raw(0xff45, 0x00); // LYC
 		self.write_byte_raw(0xff47, 0xfc); // BGP
 		self.write_byte_raw(0xff48, 0xff); // OBP0
@@ -95,6 +100,14 @@ impl Memory {
 	pub fn set_rom(&mut self, rom: Vec<u8>) {
 		self.rom_loaded = rom;
 	}
+	// Borrow
+	// pub fn borrow_rom_header(&mut self, header: &CartridgeHeader) {
+	// 	self.rom_header = Some(header);
+	// }
+
+    pub fn get_timers(&self) -> &Timer {
+        &self.timer.as_ref()
+    }
 
 	// Private members
 
@@ -141,7 +154,10 @@ impl Memory {
 		match addr {
 			0x0000 ... 0x3FFF => self.rom_loaded[addr as u16 as usize],
 			// TODO: Memory bank switching
-			0x4000 ... 0x7FFF => panic!("Bank switching unimplemented"), // self.rom_loaded[addr as u16 as usize],
+			0x4000 ... 0x7FFF => {
+					self.rom_loaded[addr as u16 as usize]
+					//panic!("Bank switching unimplemented"); // self.rom_loaded[addr as u16 as usize],
+				},
 			0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000),	// Mirrored memory
 			0xFEA0 ... 0xFEFF => panic!("Unusable memory accessed"),
 			0xFF00 ... 0xFF79 => self.ioreg_rb(addr),
@@ -197,32 +213,38 @@ impl Memory {
 					0x7 => self.timer.tac,
 					0xf => self.if_,
 
-					_ => 0xFF,
+					_ => self.read_byte_raw(addr),
 				}
 			}
-			_ => 0xFF,
+			_ => self.read_byte_raw(addr),
 		}
 	}
 
-	fn ioreg_wb(&mut self, addr: u16, val: u8) {
-        debug!("ioreg_wb {:x} {:x}", addr, val);
+	fn ioreg_wb(&mut self, addr: u16, data: u8) {
+        debug!("ioreg_wb {:x} {:x}", addr, data);
         match (addr >> 4) & 0xF {
 			0x0 => {
 				match addr & 0xF {
 					0x0 => { debug!("Serial data transfer (unimplemented) in address 
-						{:04X}, data {:02X}", addr, val)}
+						{:04X}, data {:02X}", addr, data)}
                     0x4 => { self.timer.div = 0; }
-                    0x5 => { self.timer.tima = val; }
-                    0x6 => { self.timer.tma = val; }
+                    0x5 => { self.timer.tima = data; }
+                    0x6 => { self.timer.tma = data; }
                     0x7 => {
-                        self.timer.tac = val;
+                        self.timer.tac = data;
                         self.timer.update();
                     }
-                    0xf => { self.if_ = val; }
-                    _ => {}
+                    0xf => { self.if_ = data; }
+                    _ => {
+                        warn!("Unhandled ioreg_wb address");
+                        self.write_byte_raw(addr, data);
+                    }
                 }
             }
-            _ => {}
+            _ => {
+                warn!("Unhandled ioreg_wb address");
+                self.write_byte_raw(addr, data);
+            }
         }
 	}
 

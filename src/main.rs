@@ -57,8 +57,8 @@ fn main() {
 		.opengl(OPENGL)
 		.build()
 		.unwrap();
-	window.set_max_fps(5);
-	window.set_ups(5);
+	window.set_max_fps(60);
+	window.set_ups(120);
 
 	let mut emu = emulator::Emulator::new(rom_path);
 
@@ -79,15 +79,23 @@ fn main() {
 
 	// Main Event Loop
 	while let Some(evt) = window.next() {
+
+		// Space to pause/unpause emulation
+		if let Some(Button::Keyboard(Key::Space)) = evt.press_args() {
+            emu.toggle_running();
+        }
+
 		if let Some(r) = evt.render_args() {
 
-			let mut dbg_string = format!("{:?}\n\n", emu.cpu);
+			// Debug stuff
 
+			let mut dbg_string = format!("{:?}\n\n", emu.cpu);
 			dbg_string.push_str(&format!("Registers:\n{:?}\n", emu.cpu.get_regs()));
 			dbg_string.push_str(&format!("Flags:\n{:?}\n", emu.cpu.get_flags()));
+			dbg_string.push_str(&format!("Timers:\n{:?}\n", emu.mem.get_timers()));
 			
 			// Split lines and place them appropriately
-			// TODO: Possibly use anchors for text placement
+			// TODO: Possibly use anchors for text placement (or a mono font)
 			let dbg_lines = dbg_string.split('\n');
 			for (line_n, line) in dbg_lines.enumerate() {
 				text.add(
@@ -97,14 +105,19 @@ fn main() {
 				);
 			}
 
+			// End of debug stuff
+
+			// Drawing
 			window.draw_2d(&evt, |c, g| {
 				clear(BG_COLOR, g);
 
 				text.draw(&mut g.encoder, &output_color);
 			});
 			
+			// Emulator rendering
 			//emu.render(&r);
 		}
+
 		if let Some(u) = evt.update_args() {
 			if emu.is_running() {
 				emu.update(&u);
