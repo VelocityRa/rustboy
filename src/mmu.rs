@@ -23,9 +23,8 @@
 
 #![allow(dead_code)]
 
-use cpu::Cpu;
 use timer::Timer;
-use emulator::CartridgeHeader;
+use cartridge::CartridgeHeader;
 
 const START_MAPPED_MEM: usize = 0x8000;
 const MEM_SIZE: usize = 0xFFFF + 1 - START_MAPPED_MEM;

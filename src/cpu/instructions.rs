@@ -16,9 +16,7 @@ impl Cpu {
 //	|          CPU INSTRUCTIONS          |
 //	======================================
 
-pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
-    use std::num::Wrapping;
-	
+pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {	
     macro_rules! ld (
 		($reg1:ident, $reg2:ident) => ({ r.$reg1 = r.$reg2;
 		1 }) );

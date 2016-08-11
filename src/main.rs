@@ -15,15 +15,13 @@ use glutin_window::GlutinWindow;
 
 use piston_window::*;
 
-use gfx_core::Resources;
-use gfx_graphics::Gfx2d;
-
 #[macro_use]
 mod logger;
 
 mod cpu;
 mod gpu;
 mod mmu;
+mod cartridge;
 mod emulator;
 mod timer;
 
@@ -58,7 +56,7 @@ fn main() {
 		.build()
 		.unwrap();
 	window.set_max_fps(60);
-	window.set_ups(120);
+	window.set_ups(5);
 
 	let mut emu = emulator::Emulator::new(rom_path);
 
