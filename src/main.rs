@@ -25,16 +25,21 @@ mod cartridge;
 mod emulator;
 mod timer;
 
-const SCREEN_NATIVE_DIMS: [u32; 2] = [160, 144];
-const SCREEN_MULT: u32 = 3;
-
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
-const BG_COLOR: [f32; 4] = [0.12, 0.12, 0.12, 1.0];
-const TEXT_COLOR: [f32; 4] = [1., 1., 1., 0.4];
+
+const SCREEN_NATIVE_DIMS: [u32; 2] = [160, 144];
+const SCREEN_MULT: u32 = 3;
+const BG_COLOR: [f32; 4] = [2./255., 22./255., 49./255., 1.0];
+const TEXT_COLOR: [f32; 4] = [14./255., 54./255., 98./255., 1.0];
+const TEXT_TITLE_COLOR: [f32; 4] = [0./255., 25./255., 65./255., 1.0];
+
+const SCREEN_DIMS: [u32; 2] = [SCREEN_NATIVE_DIMS[0] * SCREEN_MULT, 
+	SCREEN_NATIVE_DIMS[1] * SCREEN_MULT];
+const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
 
 fn main() {
-	
+
 	let args: Vec<_> = env::args().collect();
 	let rom_path: &String;
 
@@ -43,9 +48,6 @@ fn main() {
 		_ => panic!("No arguments provided.
 				USAGE: rustboy <path/to/rom>"),
 	}
-
-	const SCREEN_DIMS: [u32; 2] = [SCREEN_NATIVE_DIMS[0] * SCREEN_MULT, 
-		SCREEN_NATIVE_DIMS[1] * SCREEN_MULT];
 
 	let mut window: PistonWindow<GlutinWindow> = 
 		WindowSettings::new(
@@ -71,7 +73,7 @@ fn main() {
 
 	// Initialize text renderer.
 	let mut text = gfx_text::new(window.factory.clone())
-		.with_size(16)
+		.with_size(FONT_SIZE)
 		.with_font("resources/fonts/joystix monospace.ttf")
 		.build().unwrap();
 
@@ -87,10 +89,10 @@ fn main() {
 
 			// Debug stuff
 
-			let mut dbg_string = format!("{:?}\n\n", emu.cpu);
-			dbg_string.push_str(&format!("Registers:\n{:?}\n", emu.cpu.get_regs()));
-			dbg_string.push_str(&format!("Flags:\n{:?}\n", emu.cpu.get_flags()));
-			dbg_string.push_str(&format!("Timers:\n{:?}\n", emu.mem.get_timers()));
+			let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu.cpu);
+			dbg_string.push_str(&format!("\tRegisters\n{:?}\n\n", emu.cpu.get_regs()));
+			dbg_string.push_str(&format!("\tFlags\n{:?}\n\n", emu.cpu.get_flags()));
+			dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));
 			
 			// Split lines and place them appropriately
 			// TODO: Possibly use anchors for text placement (or a mono font)
@@ -98,8 +100,12 @@ fn main() {
 			for (line_n, line) in dbg_lines.enumerate() {
 				text.add(
 					line,
-					[10, 10 + line_n as i32 * 16 + 1],
-					TEXT_COLOR,
+					[10, 10 + line_n as i32 * FONT_SIZE as i32 + 1],
+					if line.len() !=0 && line.as_bytes()[0] == '\t' as u8 {
+						TEXT_TITLE_COLOR
+					} else {
+						TEXT_COLOR
+					},
 				);
 			}
 

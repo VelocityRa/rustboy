@@ -137,30 +137,6 @@ impl Registers {
 	}
 }
 
-impl fmt::Debug for Registers {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "PC: {:04X}  SP: {:04X}
-			A: {:02X}
-			B: {:02X}  BC: {:04X}
-			C: {:02X}
-			D: {:02X}  DE: {:04X}
-			E: {:02X}
-			H: {:02X}  HL: {:04X}
-			L: {:02X}
-			",
-			self.pc, self.sp,
-			self.a,
-			self.b, self.bc(),
-			self.c,
-			self.d, self.de(),
-			self.e,
-			self.h, self.hl(),
-			self.l,
-		)
-	}
-}
-
-
 #[derive(Default)]
 pub struct Flag {
 	value: bool,
@@ -213,23 +189,6 @@ impl Flags {
 		self.c.unset();
 	}
 }
-
-
-impl fmt::Debug for Flags {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "Z: {}
-			N: {}
-			H: {}
-			C: {}
-			",
-			self.z,
-			self.n,
-			self.h,
-			self.c,
-		)
-	}
-}
-
 
 pub struct Cpu {
 	regs: Registers,
@@ -359,14 +318,52 @@ impl Cpu {
 
 impl fmt::Debug for Cpu {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "State: {}
-			Cycles: {}",
+		write!(f, 
+" State: {}
+ Cycles: {}",
 			if self.is_running {"Running"} else {"Paused"},
 			self.total_cycles,
 			)
 	}
 }
 
+impl fmt::Debug for Registers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, 
+" PC: {:04X}  SP: {:04X}
+ A: {:02X}
+ B: {:02X}  BC: {:04X}
+ C: {:02X}
+ D: {:02X}  DE: {:04X}
+ E: {:02X}
+ H: {:02X}  HL: {:04X}
+ L: {:02X}",
+            self.pc, self.sp,
+            self.a,
+            self.b, self.bc(),
+            self.c,
+            self.d, self.de(),
+            self.e,
+            self.h, self.hl(),
+            self.l,
+        )
+    }
+}
+
+impl fmt::Debug for Flags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, 
+" Z: {}
+ N: {}
+ H: {}
+ C: {}",
+            self.z,
+            self.n,
+            self.h,
+            self.c,
+        )
+    }
+}
 
 //	======================================
 //	|               TESTS                |

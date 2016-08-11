@@ -98,7 +98,7 @@ impl Timer {
 
 impl fmt::Debug for Timer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "div: {}  c_div: {}\ntima: {}  c_tima: {}\ntma: {}\ntac: {}\ntima_speed: {}
+        write!(f, " div: {}  c_div: {}\n tima: {}  c_tima: {}\n tma: {}\n tac: {}\n tima_speed: {}
             ",
             self.div, self.clock.div,
             self.tima, self.clock.tima,
