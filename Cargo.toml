@@ -6,12 +6,11 @@ authors = ["VelocityRa <makren67@gmail.com>"]
 
 [dependencies]
 piston = "0.24.0"
-piston2d-graphics = "0.17.0"
 piston_window = "*"
+piston2d-graphics = "0.17.0"
+piston2d-gfx_graphics = "*"
 pistoncore-glutin_window = "*"
 gfx = "0.12.0"
 gfx_core = "*"
-piston2d-gfx_graphics = "*"
 gfx_device_gl = "*"
-gfx_debug_draw = "0.10.0"
 gfx_text = "*"

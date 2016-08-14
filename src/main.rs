@@ -4,7 +4,6 @@ extern crate glutin_window;
 extern crate gfx_graphics;
 extern crate gfx;
 extern crate gfx_core;
-extern crate gfx_debug_draw;
 extern crate gfx_text;
 extern crate gfx_device_gl;
 extern crate piston_window;

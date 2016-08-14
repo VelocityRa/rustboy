@@ -4,7 +4,6 @@ version = "0.1.0"
 dependencies = [
  "gfx 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx_core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx_debug_draw 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx_device_gl 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx_text 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston 0.24.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -226,16 +225,6 @@ dependencies = [
  "bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "draw_state 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "gfx_debug_draw"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "gfx 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx_text 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "vecmath 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -987,7 +976,6 @@ dependencies = [
 "checksum gdi32-sys 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "65256ec4dc2592e6f05bfc1ca3b956a4e0698aa90b1dff1f5687d55a5a3fd59a"
 "checksum gfx 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "143fb47ca5d8f98b8b4118163e7f48f679ed8957badae40c3236762370c0eaea"
 "checksum gfx_core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "58e5aefe4daeef65e95af13a15414de86275774c7d4cc5c83f3400add586fc93"
-"checksum gfx_debug_draw 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "adc7c84b97f468390e921a24b53d734b8d4a1b8b7c160ca7ed00958806db830f"
 "checksum gfx_device_gl 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1600ec98e87a1efdf4d119766e59abf63b11da5ba4ff44be860ccdaed06841b8"
 "checksum gfx_gl 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f25c3866329ab91b92bfbc4d5e1d8172607e804564d90b8fbecb96cbc366845d"
 "checksum gfx_text 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f27b81d9d6c38e58d74ced33dbdf0009d33f2ade5dd7652344802e32c30869ee"
