@@ -54,10 +54,16 @@ pub struct Registers  {
 
 
 impl Registers {
+    pub fn af(&self) -> u16 { (self.a as u16) << 8 | 
+        ((self.f.z.value as u16) << 7) | (self.f.n.value as u16) << 6
+        | (self.f.h.value as u16) << 5 | (self.f.c.value as u16) << 4 }
 	pub fn bc(&self) -> u16 { (self.b as u16) << 8 | self.c as u16 }
 	pub fn de(&self) -> u16 { (self.d as u16) << 8 | self.e as u16 }
-	pub fn hl(&self) -> u16 { (self.h as u16) << 8 | self.l as u16 }
+    pub fn hl(&self) -> u16 { (self.h as u16) << 8 | self.l as u16 }
 
+    pub fn af_set(&mut self, new: u16){ self.a = (new >> 8) as u8;
+        self.f.z.set_if(new & 0x80 != 0); self.f.n.set_if(new & 0x40 != 0);
+        self.f.h.set_if(new & 0x20 != 0); self.f.c.set_if(new & 0x10 != 0);}
 	pub fn bc_set(&mut self, new: u16){ self.b = (new >> 8) as u8; self.c = new as u8; }
 	pub fn de_set(&mut self, new: u16){ self.d = (new >> 8) as u8; self.e = new as u8; }
 	pub fn hl_set(&mut self, new: u16){ self.h = (new >> 8) as u8; self.l = new as u8; }
@@ -135,6 +141,16 @@ impl Registers {
 		if v == 0 {self.f.z.set()} else {self.f.z.unset()};
 		if v & 0xF == 0xF {self.f.h.set()} else {self.f.h.unset()};
 	}
+
+    fn add_hlsp(&mut self) {
+        let hl = self.hl() as u32;
+        let s = hl + self.sp as u32;
+        self.f.h.set_if(hl & 0xfff > s & 0xfff);
+        self.f.c.set_if(s > 0xffff);
+        self.f.n.unset();
+        self.h = (s >> 8) as u8;
+        self.l = s as u8;
+    }
 }
 
 #[derive(Default)]
