@@ -14,9 +14,6 @@ use timer::Timer;
 // CPU Clock speed
 pub const CLOCK_SPEED: f64 = 4.194304; // MHz
 
-// Clock cycles between every screen refresh 
-pub const SCREEN_REFRESH_INTERVAL: u32 = 70224; // clock cycles
-
 #[allow(dead_code)]
 pub enum Interrupt {
     Vblank  = 0x01,
@@ -34,7 +31,7 @@ pub enum Interrupt {
 pub struct Registers  {
     pub ime: u32,
 	halt: bool,
-	stop: bool,
+	pub stop: bool,
 
 	a: u8,		// A: Accumulator
 	b: u8,
@@ -211,8 +208,9 @@ pub struct Cpu {
 	timer: Timer,
 	total_cycles: u32,
 
-	pub is_running: bool,
-	pub is_stepping: bool
+    pub is_running: bool,
+	pub is_stepping: bool,
+    pub is_debugging: bool,
 }
 
 impl Cpu {
@@ -222,7 +220,8 @@ impl Cpu {
 			timer: Timer::new(),
 			total_cycles: 0,
 			is_running: true,
-			is_stepping: false,
+            is_stepping: false,
+            is_debugging: true,
 		};
 		cpu.reset_state();
 		// Runs for just 1 instruction every run() call (for debugging)
@@ -286,49 +285,41 @@ impl Cpu {
 	}
 
 	// Dispatcher
-	pub fn run(&mut self, mem: &mut Memory) {
+	pub fn exec(&mut self, mem: &mut Memory) -> u32 {
 
-		while self.total_cycles < SCREEN_REFRESH_INTERVAL {
-			// Interrupt step
-			self.regs.int_step();
+		// Interrupt step
+		self.regs.int_step();
 
-			// Fetch opcode
-			let op: u8 = mem.rb(self.regs.pc);
+		// Fetch opcode
+		let op: u8 = mem.rb(self.regs.pc);
+	
+		//debug!("PC:{:04X}, OP:{:02X}", self.regs.pc, op);
+		let pc_before = self.regs.pc;
+
+		// Increment PC
+		self.regs.pc += 1;
 		
-			//debug!("PC:{:04X}, OP:{:02X}", self.regs.pc, op);
-			let pc_before = self.regs.pc;
+		// Execute instruction
+		let cycles = instructions::exec(op, &mut self.regs, mem);
 
-			// Increment PC
-			self.regs.pc += 1;
-			
-			// Execute instruction
-			let cycles = instructions::exec(op, &mut self.regs, mem);
+		//println!("{} {}", self.regs.pc, pc_before);
 
-			//println!("{} {}", self.regs.pc, pc_before);
-
-			if op != 0x00 {
-				match self.regs.pc as i32 - pc_before as i32 {
-					1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
-					2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
-						pc_before, op, mem.rb(pc_before + 1)),
-					3 => println!("[0x{:08X}] 0x{:02X} 0x{:02X} 0x{:02X}",
-						pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
-					_ => {}//println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
-				};
+		if op != 0x00 {
+			match self.regs.pc as i32 - pc_before as i32 {
+				1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
+				2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
+					pc_before, op, mem.rb(pc_before + 1)),
+				3 => println!("[0x{:08X}] 0x{:02X} 0x{:02X} 0x{:02X}",
+					pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
+				_ => {}//println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
 			};
-			
-			if self.regs.stop {self.stop(); return}
-			self.total_cycles += cycles * 4;
+		};
+		
+        self.total_cycles += cycles * 4;
 
-			if self.is_stepping { return; }
+        //debug!("Cycles: {}", self.total_cycles);
 
-			//debug!("Cycles: {}", self.total_cycles);
-
-		}
-
-		// Should this get reset or should we modulo above
-		// Not sure yet...
-		self.total_cycles = 0;
+        return cycles;
 	}
 }
 

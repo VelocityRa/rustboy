@@ -1,3 +1,5 @@
+#![feature(type_macros)]
+
 extern crate piston;
 extern crate graphics;
 extern crate glutin_window;
@@ -27,14 +29,12 @@ mod timer;
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
-const SCREEN_NATIVE_DIMS: [u32; 2] = [160, 144];
 const SCREEN_MULT: u32 = 3;
 const BG_COLOR: [f32; 4] = [2./255., 22./255., 49./255., 1.0];
 const TEXT_COLOR: [f32; 4] = [14./255., 54./255., 98./255., 1.0];
 const TEXT_TITLE_COLOR: [f32; 4] = [0./255., 25./255., 65./255., 1.0];
 
-const SCREEN_DIMS: [u32; 2] = [SCREEN_NATIVE_DIMS[0] * SCREEN_MULT, 
-	SCREEN_NATIVE_DIMS[1] * SCREEN_MULT];
+const SCREEN_DIMS: [u32; 2] = [160 * SCREEN_MULT, 144 * SCREEN_MULT];
 const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
 
 fn main() {
@@ -59,14 +59,14 @@ fn main() {
 	window.set_max_fps(60);
 	window.set_ups(5);
 
-	let mut emu = emulator::Emulator::new(rom_path);
+	let mut emu = emulator::Emulator::new(&window, rom_path);
 
 	emu.read_header();
 
 	// Append game name to title
 	window.set_title(
 		format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
-		);
+	);
 
 	let output_color = window.output_color.clone();
 
@@ -84,41 +84,45 @@ fn main() {
             emu.toggle_running();
         }
 
+		// D to enable/disable debugging text
+		if let Some(Button::Keyboard(Key::D)) = evt.press_args() {
+            emu.toggle_debugging();
+        }
+
 		if let Some(r) = evt.render_args() {
-
-			// Debug stuff
-
-			let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu.cpu);
-			dbg_string.push_str(&format!("\tRegisters\n{:?}\n\n", emu.cpu.get_regs()));
-			dbg_string.push_str(&format!("\tFlags\n{:?}\n\n", emu.cpu.get_flags()));
-			dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));
-			
-			// Split lines and place them appropriately
-			// TODO: Possibly use anchors for text placement (or a mono font)
-			let dbg_lines = dbg_string.split('\n');
-			for (line_n, line) in dbg_lines.enumerate() {
-				text.add(
-					line,
-					[10, 10 + line_n as i32 * FONT_SIZE as i32 + 1],
-					if line.len() !=0 && line.as_bytes()[0] == '\t' as u8 {
-						TEXT_TITLE_COLOR
-					} else {
-						TEXT_COLOR
-					},
-				);
-			}
-
-			// End of debug stuff
-
-			// Drawing
+			// Draw BG
 			window.draw_2d(&evt, |c, g| {
 				clear(BG_COLOR, g);
-
-				text.draw(&mut g.encoder, &output_color);
 			});
-			
+
 			// Emulator rendering
-			//emu.render(&r);
+			emu.render(&r, &mut window, &evt);
+
+			// Debugger rendering
+			if emu.cpu.is_debugging {
+				let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu.cpu);
+				dbg_string.push_str(&format!("\tRegisters\n{:?}\n\n", emu.cpu.get_regs()));
+				dbg_string.push_str(&format!("\tFlags\n{:?}\n\n", emu.cpu.get_flags()));
+				dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));
+				
+				// Split lines and place them appropriately
+				// TODO: Possibly use anchors for text placement
+				let dbg_lines = dbg_string.split('\n');
+				for (line_n, line) in dbg_lines.enumerate() {
+					text.add(
+						line,
+						[10, 10 + line_n as i32 * FONT_SIZE as i32 + 1],
+						if line.len() !=0 && line.as_bytes()[0] == '\t' as u8 {  // sorry
+							TEXT_TITLE_COLOR
+						} else {
+							TEXT_COLOR
+						},
+					);
+				}
+				window.draw_2d(&evt, |c, g| {
+					text.draw(&mut g.encoder, &output_color);
+				});
+			}
 		}
 
 		if let Some(u) = evt.update_args() {

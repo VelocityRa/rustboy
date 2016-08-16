@@ -23,7 +23,10 @@
 
 #![allow(dead_code)]
 
+use piston_window::PistonWindow;
+
 use timer::Timer;
+use gpu::Gpu;
 use cartridge::CartridgeHeader;
 
 const START_MAPPED_MEM: usize = 0x8000;
@@ -32,8 +35,8 @@ const MEM_SIZE: usize = 0xFFFF + 1 - START_MAPPED_MEM;
 pub struct Memory {
 	// Interrupt flags, http://problemkaputt.de/pandocs.htm#interrupts
 	// The master enable flag will be on the cpu
-	if_: u8,
-	ie_: u8,
+	pub if_: u8,
+	pub ie_: u8,
 
 	raw_mem: [u8; MEM_SIZE],
 
@@ -42,19 +45,22 @@ pub struct Memory {
 	//rom_header: Option<&CartridgeHeader>,
 
 	pub timer: Box<Timer>,
+	pub gpu: Box<Gpu>,
 }
 
 impl Memory {
 	// Allocate a 64k byte array and zero initialize it
 	// This is all the system's RAM
-	pub fn new() -> Memory {
+	pub fn new(window: &PistonWindow) -> Memory {
 		let mut mem = Memory {
 			if_: 0u8,
 			ie_: 0u8,
 			raw_mem: [0u8; MEM_SIZE],
 			rom_loaded: Vec::new(),
+
 			//rom_header: None,
 			timer: Box::new(Timer::new()),
+			gpu: Box::new(Gpu::new(window)),
 		};
 		mem.power_on();
 		mem
@@ -83,7 +89,7 @@ impl Memory {
 		self.write_byte_raw(0xff24, 0x77); // NR50
 		self.write_byte_raw(0xff25, 0xf3); // NR51
 		self.write_byte_raw(0xff26, 0xf1); // NR52
-		self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
+		self.write_byte_raw(0xff40, 0x91); // LCDC, tweaked to turn the window on
 		self.write_byte_raw(0xff42, 0x00); // SCY
         self.write_byte_raw(0xff43, 0x00); // SCX
         self.write_byte_raw(0xff44, 0x00); // LY
@@ -201,6 +207,7 @@ impl Memory {
 	fn ioreg_rb(&self, addr: u16) -> u8 {
 		debug!("ioreg_rb {:x}", addr);
 		match (addr >> 4) & 0xF {
+			// I/O Ports (0xFF0x)
 			0x0 => {
 				match addr & 0xF {
 					// TODO: Input
@@ -215,6 +222,16 @@ impl Memory {
 					_ => self.read_byte_raw(addr),
 				}
 			}
+            // Video I/O Registers (0xFF4x)
+            0x4 => {
+                match addr & 0xF {
+                    0...5 | 7...0xB | 0xF => {
+        				debug!("gpu_rb {:x}", addr);
+                    	self.gpu.rb(addr)
+                    },
+                    _ => self.read_byte_raw(addr),
+                }
+            }
 			_ => self.read_byte_raw(addr),
 		}
 	}
@@ -222,10 +239,10 @@ impl Memory {
 	fn ioreg_wb(&mut self, addr: u16, data: u8) {
         debug!("ioreg_wb {:x} {:x}", addr, data);
         match (addr >> 4) & 0xF {
+        	// I/O Ports (0xFF0x)
 			0x0 => {
 				match addr & 0xF {
-					0x0 => { debug!("Serial data transfer (unimplemented) in address 
-						{:04X}, data {:02X}", addr, data)}
+					0x0 => { debug!("Serial data transfer (unimplemented) in address {:04X}, data {:02X}", addr, data)}
                     0x4 => { self.timer.div = 0; }
                     0x5 => { self.timer.tima = data; }
                     0x6 => { self.timer.tma = data; }
@@ -240,8 +257,21 @@ impl Memory {
                     }
                 }
             }
+            // Video I/O Registers (0xFF4x)
+            0x4 => {
+                match addr & 0xF {
+                    0...3 | 5 | 7...0xB => {
+                    	let dt = self.gpu.wb(addr, data);
+        				debug!("gpu_wb {:x} {:x}", addr, data);
+                    	dt
+                    },
+                    4 => warn!("LY read request, but it is read-only"),
+                    6 => warn!("DMA transfer requested (unimplemented)"),
+                    _ => self.write_byte_raw(addr, data)
+                }
+            }
             _ => {
-                warn!("Unhandled ioreg_wb address");
+                warn!("Unhandled ioreg_wb address: {:04X}", addr);
                 self.write_byte_raw(addr, data);
             }
         }

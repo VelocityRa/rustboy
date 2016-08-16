@@ -1,5 +1,5 @@
 use piston::input::*;
-use glutin_window::OpenGL;
+use piston_window::PistonWindow;
 
 use std::error::Error;
 use std::fs::File;
@@ -9,20 +9,23 @@ use std::path::Path;
 
 use cpu::Cpu;
 use mmu::Memory;
+use gpu::Gpu;
 use cartridge::*;
+
+// Clock cycles between every screen refresh 
+pub const SCREEN_REFRESH_INTERVAL: u32 = 70224; // clock cycles
 
 pub struct Emulator {
 	pub cpu: Cpu,
 	pub mem: Memory,
-	pub rom_header: CartridgeHeader,
+    pub rom_header: CartridgeHeader,
 }
 
 impl Emulator {
-	pub fn new(rom_path: &String) -> Emulator {
-
+	pub fn new(window: &PistonWindow, rom_path: &String) -> Emulator {
 		let mut emu = Emulator {
 			cpu: Cpu::new(),
-			mem: Memory::new(),
+			mem: Memory::new(window),
 			rom_header: Default::default(),
 		};
 
@@ -36,8 +39,9 @@ impl Emulator {
 	}
 
 	// Render screen
-	pub fn render(&mut self, args: &RenderArgs) {
+	pub fn render(&mut self, args: &RenderArgs, window: &mut PistonWindow, evt: &Event) {
 
+        self.mem.gpu.display(window, evt);
 	}
 
 	// Update state
@@ -45,7 +49,19 @@ impl Emulator {
 	pub fn update(&mut self, args: &UpdateArgs) {
 		// If is_stepping is false, runs for a frame (~70k clock cycles)
 		// If it's true runs for just 1 instruction
-		self.cpu.run(&mut self.mem);
+		let mut temp_total_cycles = 0;
+		while temp_total_cycles <= SCREEN_REFRESH_INTERVAL {
+			let cycles = self.cpu.exec(&mut self.mem);
+            self.mem.timer.step(cycles, &mut self.mem.if_);
+        	self.mem.gpu.step(cycles, &mut self.mem.if_);
+
+
+			if self.cpu.get_regs().stop {self.cpu.stop(); return; }
+
+			if self.cpu.is_stepping { return; }
+
+			temp_total_cycles += cycles;
+		}
 	}
 
 	pub fn read_header(&mut self) {
@@ -68,6 +84,9 @@ impl Emulator {
     }
     pub fn toggle_running(&mut self) {
         self.cpu.is_running = !self.cpu.is_running;
+    }
+    pub fn toggle_debugging(&mut self) {
+        self.cpu.is_debugging = !self.cpu.is_debugging;
     }
     
 }

@@ -76,7 +76,7 @@ impl Timer {
 
         // Increment the DIV timer as necessary (1/64th the speed)
         while self.clock.div >= 64 {
-            self.div += 1;
+            self.div.wrapping_add(1);
             self.clock.div -= 64;
         }
 
