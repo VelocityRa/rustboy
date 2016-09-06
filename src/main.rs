@@ -9,15 +9,25 @@ extern crate gfx_core;
 extern crate gfx_text;
 extern crate gfx_device_gl;
 extern crate piston_window;
+extern crate image;
+extern crate texture;
 extern crate rand;
 
 use std::env;
 
 use glutin_window::GlutinWindow;
-use graphics::rectangle::square;
-use piston_window::*;
-use gfx_device_gl::Resources as R;
+use graphics::clear;
+
+//use piston_window::*;
+use piston_window::{OpenGL, PistonWindow, WindowSettings, Image, Texture};
+//use graphics::*;
+use image::{ImageBuffer, Pixel, Rgb};
+use piston::event_loop::EventLoop;
+use piston::window::AdvancedWindow;
+use piston::input::*;
 use graphics::types::SourceRectangle;
+
+use texture::*;
 
 #[macro_use]
 mod logger;
@@ -40,8 +50,8 @@ const TEXT_TITLE_COLOR: [f32; 4] = [0./255., 25./255., 65./255., 1.0];
 const SCREEN_DIMS: [u32; 2] = [160 * SCREEN_MULT, 144 * SCREEN_MULT];
 const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
 
-fn main() {
 
+fn main() {
     let args: Vec<_> = env::args().collect();
     let rom_path: &String;
 
@@ -79,15 +89,9 @@ fn main() {
         .with_font("resources/fonts/joystix monospace.ttf")
         .build().unwrap();
 
-    // TODO: Use ImageBuffer
-    let screen_buffer: ImageBuffer<Rgba<u8>, [u8; WIDTH * HEIGHT * 4]> = ImageBuffer::from_raw(160, 144, &*emu.mem.gpu.image_data).unwrap();
-
-    // let ts = TextureSettings::new().compress(false).generate_mipmap(false).filter(texture::Filter::Nearest);
-    // let mut framebuffer = Texture::load_from_memory_alpha(&mut window.factory, &*emu.mem.gpu.image_data, 160, 144, &ts).unwrap();
-
-    // let r: SourceRectangle = [0, 0, SCREEN_DIMS[0] as i32, SCREEN_DIMS[1] as i32];
-
- //    let img = Image::new().src_rect(r);
+    let ts = TextureSettings::new().compress(false).generate_mipmap(false).filter(texture::Filter::Nearest);
+    
+    let mut framebuffer = Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, [160, 144], &ts).unwrap();
 
     // Main Event Loop
     while let Some(evt) = window.next() {
@@ -109,8 +113,12 @@ fn main() {
             });
 
             // Emulator rendering
-            emu.render(&r, &mut window, &evt);
-            framebuffer = Texture::from_memory_alpha(&mut window.factory, &*emu.mem.gpu.image_data, 160, 144, &ts).unwrap();
+            emu.render(&r, &mut window, &mut framebuffer, &evt);
+
+            // TODO: Move this to the above call
+            window.draw_2d(&evt, |c, g| {
+                emu.mem.gpu.img.draw(&framebuffer, &c.draw_state, c.transform, g);
+            });
 
             // Debugger rendering
             if emu.cpu.is_debugging {
@@ -136,8 +144,6 @@ fn main() {
                 window.draw_2d(&evt, |c, g| {
                     text.draw(&mut g.encoder, &output_color);
                     //framebuffer.draw(&mut g.encoder, &output_color);
-
-                    img.draw(&framebuffer, &c.draw_state, c.transform, g);
                 });
             }
         }

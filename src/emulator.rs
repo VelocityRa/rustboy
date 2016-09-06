@@ -1,6 +1,6 @@
 use piston::input::*;
-use piston_window::PistonWindow;
-
+use piston_window::{PistonWindow, Texture};
+use gfx_device_gl::Resources as R;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -39,7 +39,7 @@ impl Emulator {
     }
 
     // Render screen
-    pub fn render(&mut self, args: &RenderArgs, window: &mut PistonWindow, evt: &Event) {
+    pub fn render(&mut self, args: &RenderArgs, window: &mut PistonWindow, framebuffer: &mut Texture<R>, evt: &Event) {
 
         self.mem.gpu.display(window, evt);
     }

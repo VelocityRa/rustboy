@@ -3,6 +3,7 @@
 //
 use std::mem;
 use std::iter;
+use rand;
 
 use cpu::Interrupt;
 
@@ -10,6 +11,9 @@ use piston::input;
 use piston_window;
 use piston_window::*;
 use gfx_core::Resources;
+use gfx_device_gl::Resources as R;
+use graphics::types::SourceRectangle;
+use image::{ImageBuffer, Pixel, Rgb};
 
 const VRAM_SIZE: usize = 8 << 10; // 8K
 const OAM_SIZE: usize = 0xa0;     // 0xfe00 - 0xfe9f is OAM
@@ -18,6 +22,7 @@ const NUM_TILES: usize = 192;     // number of in-memory tiles
 
 pub const HEIGHT: usize = 144;
 pub const WIDTH: usize = 160;
+
 
 pub type Color = [u8; 4];
 
@@ -103,6 +108,9 @@ pub struct Gpu {
 
     // Compiled tiles
     tiles: Box<Tiles>,
+
+    // Image for drawing
+    pub img: Image,
 }
 
 impl Gpu {
@@ -138,9 +146,13 @@ impl Gpu {
                 data: [[[0; 8]; 8]; NUM_TILES * 2],
             }),
 
+            img: {
+                let r: SourceRectangle = [0, 0, ::SCREEN_DIMS[0] as i32, ::SCREEN_DIMS[1] as i32];
+                Image::new().src_rect(r)
+            }
+
 
         };
-        use rand;
         
         for i in 0..HEIGHT * WIDTH * 4 {
             gpu.image_data[(i) as usize] = rand::random();
@@ -154,8 +166,13 @@ impl Gpu {
         gpu
     }
 
-    pub fn display(&mut self, window: &mut piston_window::PistonWindow, evt: &input::Event) {
-        self.update();
+    pub fn display(&mut self, window: &mut PistonWindow, evt: &input::Event) {
+        //self.update();
+        
+        // window.draw_2d(&evt, |c, g| {
+        //     self.img.draw(&framebuffer, &c.draw_state, c.transform, g);
+        // })
+        //framebuffer = from_memory(&mut window.factory, &*emu.mem.gpu.image_data, 160, 144, &ts).unwrap();
 
         // window.draw_2d(evt, |c, g| {
         //     for y in 0..HEIGHT {
@@ -166,8 +183,10 @@ impl Gpu {
         // });
     }
 
-    fn update(&mut self) {
-
+    pub fn update(&mut self) {
+        for i in 0..HEIGHT * WIDTH * 4 {
+            self.image_data[(i) as usize] = rand::random();
+        }
     }
 
     pub fn rb(&self, addr: u16) -> u8 {
