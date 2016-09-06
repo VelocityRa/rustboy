@@ -16,67 +16,67 @@ use cartridge::*;
 pub const SCREEN_REFRESH_INTERVAL: u32 = 70224; // clock cycles
 
 pub struct Emulator {
-	pub cpu: Cpu,
-	pub mem: Memory,
+    pub cpu: Cpu,
+    pub mem: Memory,
     pub rom_header: CartridgeHeader,
 }
 
 impl Emulator {
-	pub fn new(window: &PistonWindow, rom_path: &String) -> Emulator {
-		let mut emu = Emulator {
-			cpu: Cpu::new(),
-			mem: Memory::new(window),
-			rom_header: Default::default(),
-		};
+    pub fn new(window: &PistonWindow, rom_path: &String) -> Emulator {
+        let mut emu = Emulator {
+            cpu: Cpu::new(),
+            mem: Memory::new(window),
+            rom_header: Default::default(),
+        };
 
-		// Read rom and move ownership to memory component
-		emu.mem.set_rom(try_open_rom(&rom_path));
+        // Read rom and move ownership to memory component
+        emu.mem.set_rom(try_open_rom(&rom_path));
 
-		// Give immutable reference of rom header to memory component
-		//emu.mem.borrow_rom_header(&emu.rom_header);
+        // Give immutable reference of rom header to memory component
+        //emu.mem.borrow_rom_header(&emu.rom_header);
 
-		emu
-	}
+        emu
+    }
 
-	// Render screen
-	pub fn render(&mut self, args: &RenderArgs, window: &mut PistonWindow, evt: &Event) {
+    // Render screen
+    pub fn render(&mut self, args: &RenderArgs, window: &mut PistonWindow, evt: &Event) {
 
         self.mem.gpu.display(window, evt);
-	}
+    }
 
-	// Update state
-	// Gets called once a frame
-	pub fn update(&mut self, args: &UpdateArgs) {
-		// If is_stepping is false, runs for a frame (~70k clock cycles)
-		// If it's true runs for just 1 instruction
-		let mut temp_total_cycles = 0;
-		while temp_total_cycles <= SCREEN_REFRESH_INTERVAL {
-			let cycles = self.cpu.exec(&mut self.mem);
+    // Update state
+    // Gets called once a frame
+    pub fn update(&mut self, args: &UpdateArgs) {
+        // If is_stepping is false, runs for a frame (~70k clock cycles)
+        // If it's true runs for just 1 instruction
+        let mut temp_total_cycles = 0;
+        while temp_total_cycles <= SCREEN_REFRESH_INTERVAL {
+            let cycles = self.cpu.exec(&mut self.mem);
             self.mem.timer.step(cycles, &mut self.mem.if_);
-        	self.mem.gpu.step(cycles, &mut self.mem.if_);
-        	
-			temp_total_cycles += cycles;
+            self.mem.gpu.step(cycles, &mut self.mem.if_);
+            
+            temp_total_cycles += cycles;
 
-			if self.cpu.get_regs().stop {self.cpu.stop(); return; }
-			if self.cpu.is_stepping { return; }
-		}
-	}
+            if self.cpu.get_regs().stop {self.cpu.stop(); return; }
+            if self.cpu.is_stepping { return; }
+        }
+    }
 
-	pub fn read_header(&mut self) {
-		self.rom_header = read_header_impl(&self);
-	}
-	pub fn get_header(&self) -> &CartridgeHeader {
-		&self.rom_header
-	}
+    pub fn read_header(&mut self) {
+        self.rom_header = read_header_impl(&self);
+    }
+    pub fn get_header(&self) -> &CartridgeHeader {
+        &self.rom_header
+    }
 /*
-	pub fn update_cpu_timers(&mut self, dt: f64) {
-		self.cpu.update_timers(&mut self.mem);
-	}
+    pub fn update_cpu_timers(&mut self, dt: f64) {
+        self.cpu.update_timers(&mut self.mem);
+    }
 */
-	#[inline]
-	pub fn is_running(&self) -> bool {
-		self.cpu.is_running
-	}
+    #[inline]
+    pub fn is_running(&self) -> bool {
+        self.cpu.is_running
+    }
     pub fn set_running(&mut self, state: bool) {
         self.cpu.is_running = state;
     }
@@ -91,44 +91,44 @@ impl Emulator {
 
 fn open_rom<P: AsRef<Path>>(rom_path: P) -> io::Result< Vec<u8> > {
 
-	// try! to open the file
-	let mut rom_file = try!(File::open(rom_path));
+    // try! to open the file
+    let mut rom_file = try!(File::open(rom_path));
 
-	// Create the buffer
-	let mut rom_buffer: Vec<u8> = Vec::new();
+    // Create the buffer
+    let mut rom_buffer: Vec<u8> = Vec::new();
 
-	// Read the data
-	try!(rom_file.read_to_end(&mut rom_buffer));
+    // Read the data
+    try!(rom_file.read_to_end(&mut rom_buffer));
 
-	// no panic! issued so we're good
-	return Ok(rom_buffer);
+    // no panic! issued so we're good
+    return Ok(rom_buffer);
 }
 
 // Wrapper for open_rom
 pub fn try_open_rom<P: AsRef<Path>>(rom_path: P) -> Vec<u8> {
 
-	// Create a Path and a Display to the desired file
-	let rom_display = rom_path.as_ref().display();
+    // Create a Path and a Display to the desired file
+    let rom_display = rom_path.as_ref().display();
 
-	// Call open_rom and handle Result
-	match open_rom(&rom_path) {
-		Err(why) => 
-			panic!("Couldn't open rom {}: {}", rom_display,
-				why.description()),
-		Ok(data) => {
-			println!("Read {} bytes from ROM: {}.", data.len(), rom_display);
-			data
-		},
-	}
+    // Call open_rom and handle Result
+    match open_rom(&rom_path) {
+        Err(why) => 
+            panic!("Couldn't open rom {}: {}", rom_display,
+                why.description()),
+        Ok(data) => {
+            println!("Read {} bytes from ROM: {}.", data.len(), rom_display);
+            data
+        },
+    }
 }
 
 
-//	======================================
-//	|               TESTS                |
-//	======================================
+//  ======================================
+//  |               TESTS                |
+//  ======================================
 
 #[cfg(test)]
 mod emu_tests {
-	use super::*;
+    use super::*;
 
 }

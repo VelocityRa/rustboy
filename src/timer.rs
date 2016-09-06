@@ -7,19 +7,19 @@ use std::fmt;
 
 #[derive(Default)]
 struct Clock {
-	div: u32,
-	tima: u32,
+    div: u32,
+    tima: u32,
 }
 
 pub struct Timer {
     clock: Clock,
 
-	// This register is incremented at rate of 16384Hz
-	// Writing any value to this register resets it to 00h
+    // This register is incremented at rate of 16384Hz
+    // Writing any value to this register resets it to 00h
     pub div: u8,
-    	// This timer is incremented by a clock frequency specified by the TAC register ($FF07)
-	// When the value overflows (gets bigger than FFh) then it will be reset to the 
-	// value specified in TMA (FF06), and an interrupt will be requested
+        // This timer is incremented by a clock frequency specified by the TAC register ($FF07)
+    // When the value overflows (gets bigger than FFh) then it will be reset to the 
+    // value specified in TMA (FF06), and an interrupt will be requested
     pub tima: u8,
 
     pub tma: u8,
@@ -43,7 +43,7 @@ impl Timer {
         }
     }
 
-	pub fn update(&mut self) {
+    pub fn update(&mut self) {
         // See step() function for timings
         match self.tac & 0x3 {
             0x0 => { self.tima_speed = 256; }

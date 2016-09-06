@@ -2,173 +2,173 @@ use super::*;
 use super::super::mmu;
 
 impl Cpu {
-	pub fn nop(&mut self) {
-		debug!("NOP:{:04X}", self.regs.pc);
-	}
+    pub fn nop(&mut self) {
+        debug!("NOP:{:04X}", self.regs.pc);
+    }
 
-	pub fn stop(&mut self) {
-		warn!("STOP instruction issued at {:04X}", self.regs.pc);
-		self.is_running = false;
-	}
+    pub fn stop(&mut self) {
+        warn!("STOP instruction issued at {:04X}", self.regs.pc);
+        self.is_running = false;
+    }
 }
 
-//	======================================
-//	|          CPU INSTRUCTIONS          |
-//	======================================
+//  ======================================
+//  |          CPU INSTRUCTIONS          |
+//  ======================================
 
-pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {	
+pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {  
     macro_rules! ld (
-		($reg1:ident, $reg2:ident) => ({ r.$reg1 = r.$reg2;
-		1 }) );
+        ($reg1:ident, $reg2:ident) => ({ r.$reg1 = r.$reg2;
+        1 }) );
 
-	macro_rules! ld_n (
-		($reg1:ident) => ({	r.$reg1 = m.rb(r.bump());
-		2 }) );
+    macro_rules! ld_n (
+        ($reg1:ident) => ({ r.$reg1 = m.rb(r.bump());
+        2 }) );
 
-	macro_rules! ld_nn (
-		($reg1:ident, $reg2:ident) => ({
-			r.$reg2 = m.rb(r.bump());
-			r.$reg1 = m.rb(r.bump());
-		3 }) );
+    macro_rules! ld_nn (
+        ($reg1:ident, $reg2:ident) => ({
+            r.$reg2 = m.rb(r.bump());
+            r.$reg1 = m.rb(r.bump());
+        3 }) );
 
-	macro_rules! call (
-		() => ({
-			r.sp -= 2;
-			m.ww(r.sp, r.pc + 2);
-			let target = m.rw(r.pc);
-			debug!("CALL to {:04X}", target);
-			r.pc = target;
-		6 }) );
+    macro_rules! call (
+        () => ({
+            r.sp -= 2;
+            m.ww(r.sp, r.pc + 2);
+            let target = m.rw(r.pc);
+            debug!("CALL to {:04X}", target);
+            r.pc = target;
+        6 }) );
 
-	macro_rules! call_if (
-		($should_call:expr) => (if $should_call {call!()} else {r.pc += 2;
-		3 }) );
+    macro_rules! call_if (
+        ($should_call:expr) => (if $should_call {call!()} else {r.pc += 2;
+        3 }) );
 
-	macro_rules! ret_if (
-		($should_ret:expr) => (if $should_ret {r.ret(m); 5} else {
-		2 }) );
+    macro_rules! ret_if (
+        ($should_ret:expr) => (if $should_ret {r.ret(m); 5} else {
+        2 }) );
 
-	macro_rules! jp (
-		() => ({debug!("JUMP to {:04X}", m.rw(r.pc));
-			r.pc = m.rw(r.pc);
-		4 }) );
+    macro_rules! jp (
+        () => ({debug!("JUMP to {:04X}", m.rw(r.pc));
+            r.pc = m.rw(r.pc);
+        4 }) );
 
-	macro_rules! jp_n (
-		($should_jp:expr) => (if $should_jp {jp!()} else {r.pc += 2; 
-		3 }) );
+    macro_rules! jp_n (
+        ($should_jp:expr) => (if $should_jp {jp!()} else {r.pc += 2; 
+        3 }) );
 
-	macro_rules! jr (
-		() => ({
-			let target = add_signed(r.pc, m.rb(r.bump()));
-			debug!("JUMP(REL) to {:04X}", target);
-			r.pc = target + 1;
-		3 }) );
+    macro_rules! jr (
+        () => ({
+            let target = add_signed(r.pc, m.rb(r.bump()));
+            debug!("JUMP(REL) to {:04X}", target);
+            r.pc = target + 1;
+        3 }) );
 
-	macro_rules! jr_n {
-	    ($cond:expr) => (if $cond {jr!()} else {r.pc += 1; 2})
-	}
+    macro_rules! jr_n {
+        ($cond:expr) => (if $cond {jr!()} else {r.pc += 1; 2})
+    }
 
-	macro_rules! inc (
-		($reg:ident) => ({
-			r.$reg.wrapping_add(1);
-			if r.$reg == 0 {r.f.z.set()};
-			if r.$reg & 0xF == 0 {r.f.h.set()};
-		1 }) );
+    macro_rules! inc (
+        ($reg:ident) => ({
+            r.$reg.wrapping_add(1);
+            if r.$reg == 0 {r.f.z.set()};
+            if r.$reg & 0xF == 0 {r.f.h.set()};
+        1 }) );
 
-	macro_rules! inc_16( 
-		($reg1:ident, $reg2: ident) => ({
-			r.$reg2 += 1;
-			if r.$reg2 == 0 { r.$reg1 += 1; }
-		2 }) );
+    macro_rules! inc_16( 
+        ($reg1:ident, $reg2: ident) => ({
+            r.$reg2 += 1;
+            if r.$reg2 == 0 { r.$reg1 += 1; }
+        2 }) );
 
-	macro_rules! dec (
-		($reg:ident) => ({
-			r.$reg.wrapping_sub(1);
-			r.f.h.unset();
-			r.f.z.unset();
-			r.f.n.set();
-			if r.$reg == 0 {r.f.z.set()};
-			if r.$reg & 0xF == 0xF {r.f.h.set()};
-		1 }) );
+    macro_rules! dec (
+        ($reg:ident) => ({
+            r.$reg.wrapping_sub(1);
+            r.f.h.unset();
+            r.f.z.unset();
+            r.f.n.set();
+            if r.$reg == 0 {r.f.z.set()};
+            if r.$reg & 0xF == 0xF {r.f.h.set()};
+        1 }) );
 
-	macro_rules! dec_16( 
-		($reg1:ident, $reg2: ident) => ({
-			r.$reg2 -= 1;
-			if r.$reg2 == 0xFF { r.$reg1 -= 1; }
-		2 }) );
+    macro_rules! dec_16( 
+        ($reg1:ident, $reg2: ident) => ({
+            r.$reg2 -= 1;
+            if r.$reg2 == 0xFF { r.$reg1 -= 1; }
+        2 }) );
 
-	macro_rules! rst (
-	($e:expr) => ({
-		debug!("RST sp: {:04X} pc: {:04X}", r.sp, r.pc);
-		r.sp -= 2;
-		m.ww(r.sp, r.pc + 1);
-		debug!("RST sp: {:04X} pc: {:04X}", r.sp, r.pc);
-		r.pc = $e;
-		debug!("RST pc: {:04X}", r.pc);
-	4 }) );
+    macro_rules! rst (
+    ($e:expr) => ({
+        debug!("RST sp: {:04X} pc: {:04X}", r.sp, r.pc);
+        r.sp -= 2;
+        m.ww(r.sp, r.pc + 1);
+        debug!("RST sp: {:04X} pc: {:04X}", r.sp, r.pc);
+        r.pc = $e;
+        debug!("RST pc: {:04X}", r.pc);
+    4 }) );
 
-	macro_rules! xor_a (
-	($val:expr) => ({
-		r.a ^= $val;
-		r.f.reset();
-		if r.a == 0 {r.f.z.set()};
-	4 }) );
+    macro_rules! xor_a (
+    ($val:expr) => ({
+        r.a ^= $val;
+        r.f.reset();
+        if r.a == 0 {r.f.z.set()};
+    4 }) );
 
-	macro_rules! or_a (
-	($val:expr) => ({
-		r.a |= $val;
-		r.f.reset();
-		if r.a == 0 {r.f.z.set()};
-	4 }) );
+    macro_rules! or_a (
+    ($val:expr) => ({
+        r.a |= $val;
+        r.f.reset();
+        if r.a == 0 {r.f.z.set()};
+    4 }) );
 
-	macro_rules! and_a (
-	($val:expr) => ({
-		r.a &= $val;
-		r.f.n.unset();
-		r.f.h.set();
-		r.f.z.unset();
-		if r.a == 0 {r.f.z.set()};
-	4 }) );
+    macro_rules! and_a (
+    ($val:expr) => ({
+        r.a &= $val;
+        r.f.n.unset();
+        r.f.h.set();
+        r.f.z.unset();
+        if r.a == 0 {r.f.z.set()};
+    4 }) );
 
-	macro_rules! cp_a (
-	($val:expr) => ({
-		let v = $val;
-		r.f.n.set();
-		if r.a == v {r.f.z.set()} else {r.f.z.unset()};
-		if r.a < v {r.f.c.set()} else {r.f.c.unset()};
-		if (r.a & 0xF) < (v & 0xF) {r.f.h.set()} else {r.f.h.unset()};
+    macro_rules! cp_a (
+    ($val:expr) => ({
+        let v = $val;
+        r.f.n.set();
+        if r.a == v {r.f.z.set()} else {r.f.z.unset()};
+        if r.a < v {r.f.c.set()} else {r.f.c.unset()};
+        if (r.a & 0xF) < (v & 0xF) {r.f.h.set()} else {r.f.h.unset()};
         //debug!("{:02X} & 0xF < ({:2X} & 0xF)    c:{:?} h:{:?} ", r.a, v, r.f.c.get(),r.f.h.get());
-	4 }) );
+    4 }) );
 
-	macro_rules! rlc (
-	($reg:ident, $n:expr) => ({
-		r.f.n.unset();
-		r.f.h.unset();
-		r.f.z.unset();
-		r.$reg.rotate_left($n);
-		if r.$reg & 0x1 == 1 {r.f.c.set()} else {r.f.c.unset()}
-	4 }) );
+    macro_rules! rlc (
+    ($reg:ident, $n:expr) => ({
+        r.f.n.unset();
+        r.f.h.unset();
+        r.f.z.unset();
+        r.$reg.rotate_left($n);
+        if r.$reg & 0x1 == 1 {r.f.c.set()} else {r.f.c.unset()}
+    4 }) );
 
-	macro_rules! rrc (
-	($reg:ident, $n:expr) => ({
-		r.f.n.unset();
-		r.f.h.unset();
-		r.f.z.unset();
-		r.$reg.rotate_right($n);
-		if r.$reg & 0x80 == 1 {r.f.c.set()} else {r.f.c.unset()}
-	4 }) );
+    macro_rules! rrc (
+    ($reg:ident, $n:expr) => ({
+        r.f.n.unset();
+        r.f.h.unset();
+        r.f.z.unset();
+        r.$reg.rotate_right($n);
+        if r.$reg & 0x80 == 1 {r.f.c.set()} else {r.f.c.unset()}
+    4 }) );
 
-	macro_rules! add_hl(
+    macro_rules! add_hl(
     ($reg:expr) => ({
-		let a = r.hl() as u32;
-		let b = $reg as u32;
-		let hl = a + b;
-		r.f.n.unset();
-		r.f.c.set_if(hl > 0xffff);
-		r.f.h.set_if((a as u32 & 0xfff) > (hl & 0xfff));
-		r.l = hl as u8;
-		r.h = (hl >> 8) as u8;
-	2 }) );
+        let a = r.hl() as u32;
+        let b = $reg as u32;
+        let hl = a + b;
+        r.f.n.unset();
+        r.f.c.set_if(hl > 0xffff);
+        r.f.h.set_if((a as u32 & 0xfff) > (hl & 0xfff));
+        r.l = hl as u8;
+        r.h = (hl >> 8) as u8;
+    2 }) );
 
     macro_rules! push (
     ($reg:ident) => ({
@@ -220,21 +220,21 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.z.set_if(r.a == 0);
     1 }) );
 
-	// TODO: use set_or_else for everything
+    // TODO: use set_or_else for everything
 
-	// macro_rules! rl (
-	
-	// 	)
+    // macro_rules! rl (
+    
+    //  )
 
 
-	// if inst != 0 {
-	// 	info!("Decoding {:02X}", inst);
-	// }
+    // if inst != 0 {
+    //  info!("Decoding {:02X}", inst);
+    // }
 
-	// Table is partially from 
-	// https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L279-L549
-	// Instruction macros implemented by me
-	match inst {
+    // Table is partially from 
+    // https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L279-L549
+    // Instruction macros implemented by me
+    match inst {
         0x00 => 1,                                                  // nop
         0x01 => ld_nn!(b, c),                                       // ld_bcnn
         
@@ -286,7 +286,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x2d => dec!(l),                                            // dec_l
         0x2e => ld_n!(l),                                           // ld_ln
         0x2f => { r.a ^= 0xff; 
-        	r.f.n.set(); r.f.h.set(); 1 }                    // cpl
+            r.f.n.set(); r.f.h.set(); 1 }                    // cpl
 
         0x30 => jr_n!(!r.f.c.get()),                                // jr_nc_n
         0x31 => { r.sp = m.rw(r.pc); r.pc += 2; 3 } // ld_spnn
@@ -296,7 +296,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x35 => { r.dec_hlm(m); 3 }                                 // dec_hlm
         0x36 => { let pc = m.rb(r.bump()); m.wb(r.hl(), pc); 3 }    // ld_hlmn
         0x37 => { r.f.n.unset(); r.f.h.unset(); 
-        	r.f.c.set(); 1 }                          // scf
+            r.f.c.set(); 1 }                          // scf
         0x38 => jr_n!(r.f.c.get()),                                 // jr_c_n
         0x39 => { r.add_hlsp(); 2 }                                  // add_hlsp
         0x3a => { r.a = m.rb(r.hl()); r.hlmm(); 2 }                 // ldd_ahlm
@@ -511,15 +511,15 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xff => rst!(0x38),                                         // rst_38
 
         _ => {
-        	error!("Unknown instruction opcode: {:02X}", inst); 0
+            error!("Unknown instruction opcode: {:02X}", inst); 0
         },
-	}
+    }
 }
 
 fn xx() -> u32 { panic!("Invalid instruction opcode"); 0 }
 
 fn add_signed(a: u16, b: u8) -> u16 {
-	(a as i16 + (b as i8 as i16)) as u16
+    (a as i16 + (b as i8 as i16)) as u16
 }
 
 fn add_spn(r: &mut Registers, m: &mut mmu::Memory) {
@@ -533,9 +533,9 @@ fn add_spn(r: &mut Registers, m: &mut mmu::Memory) {
     r.sp = res;
 }
 
-//	======================================
-//	|           CB INSTRUCTIONS          |
-//	======================================
+//  ======================================
+//  |           CB INSTRUCTIONS          |
+//  ======================================
  
 
 // From https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L555-L896
@@ -614,13 +614,13 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         $cy as u32
     }) );
     macro_rules! swap( ($e:expr) => ({
-    	r.f.h.unset(); r.f.n.unset(); r.f.c.unset();
+        r.f.h.unset(); r.f.n.unset(); r.f.c.unset();
         $e = ($e << 4) | (($e & 0xf0) >> 4);
         if $e == 0 {r.f.z.set()} else {r.f.z.unset()};
         2 as u32
     }) );
     macro_rules! bit( ($e:expr, $bit:expr) => ({
-    	r.f.h.set(); r.f.n.unset();
+        r.f.h.set(); r.f.n.unset();
         if $e & (1 << $bit) == 0 {r.f.z.set()} else {r.f.z.unset()};
         2 as u32
     }) );
