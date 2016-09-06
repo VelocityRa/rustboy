@@ -9,12 +9,15 @@ extern crate gfx_core;
 extern crate gfx_text;
 extern crate gfx_device_gl;
 extern crate piston_window;
+extern crate rand;
 
 use std::env;
 
 use glutin_window::GlutinWindow;
-
+use graphics::rectangle::square;
 use piston_window::*;
+use gfx_device_gl::Resources as R;
+use graphics::types::SourceRectangle;
 
 #[macro_use]
 mod logger;
@@ -76,6 +79,16 @@ fn main() {
 		.with_font("resources/fonts/joystix monospace.ttf")
 		.build().unwrap();
 
+	// TODO: Use ImageBuffer
+	let screen_buffer: ImageBuffer<Rgba<u8>, [u8; WIDTH * HEIGHT * 4]> = ImageBuffer::from_raw(160, 144, &*emu.mem.gpu.image_data).unwrap();
+
+	// let ts = TextureSettings::new().compress(false).generate_mipmap(false).filter(texture::Filter::Nearest);
+	// let mut framebuffer = Texture::load_from_memory_alpha(&mut window.factory, &*emu.mem.gpu.image_data, 160, 144, &ts).unwrap();
+
+	// let r: SourceRectangle = [0, 0, SCREEN_DIMS[0] as i32, SCREEN_DIMS[1] as i32];
+
+ //    let img = Image::new().src_rect(r);
+
 	// Main Event Loop
 	while let Some(evt) = window.next() {
 
@@ -97,6 +110,7 @@ fn main() {
 
 			// Emulator rendering
 			emu.render(&r, &mut window, &evt);
+			framebuffer = Texture::from_memory_alpha(&mut window.factory, &*emu.mem.gpu.image_data, 160, 144, &ts).unwrap();
 
 			// Debugger rendering
 			if emu.cpu.is_debugging {
@@ -121,6 +135,9 @@ fn main() {
 				}
 				window.draw_2d(&evt, |c, g| {
 					text.draw(&mut g.encoder, &output_color);
+					//framebuffer.draw(&mut g.encoder, &output_color);
+
+                	img.draw(&framebuffer, &c.draw_state, c.transform, g);
 				});
 			}
 		}

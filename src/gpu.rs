@@ -12,7 +12,7 @@ use piston_window::*;
 use gfx_core::Resources;
 
 const VRAM_SIZE: usize = 8 << 10; // 8K
-const OAM_SIZE: usize = 0xa0;     // 0xffe00 - 0xffe9f is OAM
+const OAM_SIZE: usize = 0xa0;     // 0xfe00 - 0xfe9f is OAM
 const CGB_BP_SIZE: usize = 64;    // 64 bytes of extra memory
 const NUM_TILES: usize = 192;     // number of in-memory tiles
 
@@ -22,6 +22,8 @@ pub const WIDTH: usize = 160;
 pub type Color = [u8; 4];
 
 const PIXEL_COLOR: Color = [40, 88, 200, 255];
+
+// Most of the code here is from jba
 
 // Palette for the monochrome GB. Possible values are:
 //
@@ -45,7 +47,7 @@ struct Tiles {
 pub struct Gpu {
     pub oam: [u8; OAM_SIZE],
 
-    image_data: Box<[u8; WIDTH * HEIGHT * 4]>,
+    pub image_data: Box<[u8; WIDTH * HEIGHT * 4]>,
 
     pub is_cgb: bool,
     pub is_sgb: bool,
@@ -53,6 +55,10 @@ pub struct Gpu {
     mode: Mode,
 
     clock: u32,
+
+    vrambanks: Box<[[u8; VRAM_SIZE]; 2]>,
+    // Selected vram bank
+    vrambank: u8,
 
     // 0xff40 - LCD control (LCDC) - in order from most to least significant bit
     pub lcdon: bool,    // LCD monitor turned on or off?
@@ -109,6 +115,8 @@ impl Gpu {
             is_sgb: false,
             
             clock: 0,
+            vrambanks: Box::new([[0; VRAM_SIZE];  2]),
+            vrambank: 0,
             
             mode: Mode::RdOam,
             wx: 0, wy: 0, obp1: 0, obp0: 0, bgp: 0,
@@ -132,19 +140,30 @@ impl Gpu {
 
 
         };
+        use rand;
+        
+        for i in 0..HEIGHT * WIDTH * 4 {
+            gpu.image_data[(i) as usize] = rand::random();
+        }
+
+        // for y in 0..HEIGHT {
+        //     for x in 0..WIDTH {
+        //         gpu.image_data[((y * WIDTH) + x) as usize] = PALETTE[2];
+        //     }
+        // }
         gpu
     }
 
     pub fn display(&mut self, window: &mut piston_window::PistonWindow, evt: &input::Event) {
         self.update();
 
-        window.draw_2d(evt, |c, g| {
-            for y in 0..HEIGHT {
-                for x in 0..WIDTH {
+        // window.draw_2d(evt, |c, g| {
+        //     for y in 0..HEIGHT {
+        //         for x in 0..WIDTH {
                     
-                }
-            }
-        });
+        //         }
+        //     }
+        // });
     }
 
     fn update(&mut self) {
@@ -183,7 +202,7 @@ impl Gpu {
             0x49 => self.obp1,
             0x4a => self.wy,
             0x4b => self.wx,
-            0x4f => {warn!("Tried to access vrambank (cgb only)"); 0xFF},
+            0x4f => self.vrambank,
 
             _ => 0xff
         }
@@ -220,14 +239,12 @@ impl Gpu {
             0x43 => { self.scx = val; }
             // 0x44 self.ly is read-only
             0x45 => { self.lyc = val; }
-            // 0x46 handled in mem
             0x47 => { self.bgp = val; update_pal(&mut self.pal.bg, val); }
             0x48 => { self.obp0 = val; update_pal(&mut self.pal.obp0, val); }
             0x49 => { self.obp1 = val; update_pal(&mut self.pal.obp1, val); }
             0x4a => { self.wy = val; }
             0x4b => { self.wx = val; }
-
-            // 0x55 handled in mem
+            0x4f => { if self.is_cgb { self.vrambank = val & 1; } }
             _ => {}
         }
     }
@@ -242,7 +259,7 @@ impl Gpu {
     // screen occurs, but that doesn't always happen when calling this function.
     pub fn step(&mut self, clocks: u32, if_: &mut u8) {
         // Timings located here:
-        //      http://nocash.emubase.de/pandocs.htm#lcdstatusregister
+        //      http://http://problemkaputt.de//pandocs.htm#lcdstatusregister
         self.clock += clocks;
 
         // If clock >= 456, then we've completed an entire line. This line might
@@ -271,11 +288,12 @@ impl Gpu {
             }
         }
     }
+
     fn switch(&mut self, mode: Mode, if_: &mut u8) {
         self.mode = mode;
         match mode {
             Mode::HBlank => {
-                //self.render_line();
+                self.render_line();
                 if self.mode0int {
                     *if_ |= Interrupt::LCDStat as u8;
                 }
@@ -297,8 +315,161 @@ impl Gpu {
         }
     }
 
-}
+    fn update_tileset(&mut self) {
+        let tiles = &mut *self.tiles;
+        let iter = tiles.to_update.iter_mut();
+        for (i, slot) in iter.enumerate().filter(|&(_, &mut i)| i) {
+            *slot = false;
 
+            // Each tile is 16 bytes long. Each pair of bytes represents a line
+            // of pixels (making 8 lines). The first byte is the LSB of the
+            // color number and the second byte is the MSB of the color.
+            //
+            // For example, for:
+            //      byte 0 : 01011011
+            //      byte 1 : 01101010
+            //
+            // The colors are [0, 2, 2, 1, 3, 0, 3, 1]
+            for j in 0..8 {
+                let addr = ((i % NUM_TILES) * 16) + j * 2;
+                // All tiles are located 0x8000-0x97ff => 0x0000-0x17ff in VRAM
+                // meaning that the index is simply an index into raw VRAM
+                let (mut lsb, mut msb) = if i < NUM_TILES {
+                    (self.vrambanks[0][addr], self.vrambanks[0][addr + 1])
+                } else {
+                    (self.vrambanks[1][addr], self.vrambanks[1][addr + 1])
+                };
+
+                // LSB is the right-most pixel.
+                for k in (0..8).rev() {
+                    tiles.data[i][j][k] = ((msb & 1) << 1) | (lsb & 1);
+                    lsb >>= 1;
+                    msb >>= 1;
+                }
+            }
+        }
+    }
+
+    pub fn bgbase(&self) -> usize {
+        // vram is from 0x8000-0x9fff
+        // self.bgmap: 0=9800-9bff, 1=9c00-9fff
+        //
+        // Each map is a 32x32 (1024) array of bytes. Each byte is an index into
+        // the tile map. Each tile is an 8x8 block of pixels.
+        if self.bgmap {0x1c00} else {0x1800}
+    }
+
+    fn render_line(&mut self) {
+        if !self.lcdon { return }
+
+        let mut scanline = [0u8; WIDTH];
+
+        if self.tiles.need_update {
+            self.update_tileset();
+            self.tiles.need_update = false;
+        }
+
+        if self.bgon {
+            self.render_background(&mut scanline);
+        }
+        if self.winon {
+            //self.render_window(&mut scanline);
+        }
+        if self.objon {
+            //self.render_sprites(&mut scanline);
+        }
+    }
+
+    pub fn add_tilei(&self, base: usize, tilei: u8) -> usize {
+        // tiledata = 0 => tilei is a signed byte, so fix it here
+        if self.tiledata {
+            base + tilei as usize
+        } else {
+            (base as isize + (tilei as i8 as isize)) as usize
+        }
+    }
+
+    fn render_background(&mut self, scanline: &mut [u8; WIDTH]) {
+
+        let mapbase = self.bgbase();
+        let line = self.ly as usize + self.scy as usize;
+
+        // Now offset from the base to the right location. We divide by 8
+        // because each tile is 8 pixels high. We then multiply by 32
+        // because each row is 32 bytes long. We can't just multiply by 4
+        // because we need the truncation to happen beforehand
+        let mapbase = mapbase + ((line % 256) >> 3) * 32;
+
+        // X and Y location inside the tile itself to paint
+        let y = (self.ly + self.scy) % 8;
+        let mut x = self.scx % 8;
+
+        // Offset into the canvas to draw. line * width * 4 colors
+        let mut coff = (self.ly as usize) * WIDTH * 4;
+
+        // this.tiledata is a flag to determine which tile data table to use
+        // 0=8800-97FF, 1=8000-8FFF. For some odd reason, if tiledata = 0, then
+        // (&tiles[0]) == 0x9000, where if tiledata = 1, (&tiles[0]) = 0x8000.
+        // This implies that the indices are treated as signed numbers.
+        let mut i = 0;
+        let tilebase = if !self.tiledata {256} else {0};
+
+        debug!("render background from {:x} {} {}", mapbase, self.scx, self.scy);
+
+        loop {
+            // Backgrounds wrap around, so calculate the offset into the bgmap
+            // each loop to check for wrapping
+            let mapoff = ((i as usize + self.scx as usize) % 256) >> 3;
+            let tilei = self.vrambanks[0][mapbase + mapoff];
+
+            // tiledata = 0 => tilei is a signed byte, so fix it here
+            let tilebase = self.add_tilei(tilebase, tilei);
+
+            let row;
+            let bgpri;
+            let hflip;
+            let bgp;
+            if self.is_cgb {
+                panic!("CGB NOT SUPPORTED");
+            } else {
+                // Non CGB backgrounds are boring :(
+                row = self.tiles.data[tilebase as usize][y as usize];
+                bgpri = false;
+                hflip = false;
+                bgp = self.pal.bg;
+            }
+
+            while x < 8 && i < WIDTH as u8 {
+                let colori = row[if hflip {7 - x} else {x} as usize];
+                let color = bgp[colori as usize];
+
+                // To indicate bg priority, list a color >= 4
+                scanline[i as usize] = if bgpri {4} else {colori};
+
+                self.image_data[coff] = color[0];
+                self.image_data[coff + 1] = color[1];
+                self.image_data[coff + 2] = color[2];
+                self.image_data[coff + 3] = color[3];
+
+                x += 1;
+                i += 1;
+                coff += 4;
+            }
+
+            x = 0;
+            if i >= WIDTH as u8 { break }
+        }
+    }
+
+    fn render_window(&mut self) {
+        
+    }
+
+    fn render_sprites(&mut self) {
+        
+    }
+
+}
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum Mode {
     HBlank = 0x00, // mode 0
@@ -317,7 +488,7 @@ struct Palette {
 // these registers are modified
 fn update_pal(pal: &mut [Color; 4], val: u8) {
     // These registers are indices into the actual palette. See
-    // http://nocash.emubase.de/pandocs.htm#lcdmonochromepalettes
+    // http://problemkaputt.de/pandocs.htm#lcdmonochromepalettes
     pal[0] = PALETTE[((val >> 0) & 0x3) as usize];
     pal[1] = PALETTE[((val >> 2) & 0x3) as usize];
     pal[2] = PALETTE[((val >> 4) & 0x3) as usize];

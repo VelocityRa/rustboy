@@ -54,13 +54,11 @@ impl Emulator {
 			let cycles = self.cpu.exec(&mut self.mem);
             self.mem.timer.step(cycles, &mut self.mem.if_);
         	self.mem.gpu.step(cycles, &mut self.mem.if_);
-
+        	
+			temp_total_cycles += cycles;
 
 			if self.cpu.get_regs().stop {self.cpu.stop(); return; }
-
 			if self.cpu.is_stepping { return; }
-
-			temp_total_cycles += cycles;
 		}
 	}
 

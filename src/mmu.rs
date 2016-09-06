@@ -89,7 +89,7 @@ impl Memory {
 		self.write_byte_raw(0xff24, 0x77); // NR50
 		self.write_byte_raw(0xff25, 0xf3); // NR51
 		self.write_byte_raw(0xff26, 0xf1); // NR52
-		self.write_byte_raw(0xff40, 0x91); // LCDC, tweaked to turn the window on
+		self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
 		self.write_byte_raw(0xff42, 0x00); // SCY
         self.write_byte_raw(0xff43, 0x00); // SCX
         self.write_byte_raw(0xff44, 0x00); // LY
