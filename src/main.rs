@@ -47,7 +47,9 @@ const BG_COLOR: [f32; 4] = [2./255., 22./255., 49./255., 1.0];
 const TEXT_COLOR: [f32; 4] = [14./255., 54./255., 98./255., 1.0];
 const TEXT_TITLE_COLOR: [f32; 4] = [0./255., 25./255., 65./255., 1.0];
 
-const SCREEN_DIMS: [u32; 2] = [160 * SCREEN_MULT, 144 * SCREEN_MULT];
+const NATIVE_DIMS: [u32; 2] = [160, 144];
+const SCREEN_DIMS: [u32; 2] = [NATIVE_DIMS[0] * SCREEN_MULT, 
+                               NATIVE_DIMS[1] * SCREEN_MULT];
 const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
 
 
@@ -70,7 +72,7 @@ fn main() {
         .build()
         .unwrap();
     window.set_max_fps(60);
-    window.set_ups(5);
+    window.set_ups(60);
 
     let mut emu = emulator::Emulator::new(&window, rom_path);
 
@@ -90,11 +92,16 @@ fn main() {
         .build().unwrap();
 
     let ts = TextureSettings::new().compress(false).generate_mipmap(false).filter(texture::Filter::Nearest);
-    
-    let mut framebuffer = Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, [160, 144], &ts).unwrap();
+
+    let mut framebuffer = match
+        Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, [160, 144], &ts) {
+            Ok(fb) => fb,
+            Err(e) => panic!("Couldn't create framebuffer texture"),
+        };
 
     // Main Event Loop
     while let Some(evt) = window.next() {
+        // debug!("EVENT: {:?}", evt);
 
         // Space to pause/unpause emulation
         if let Some(Button::Keyboard(Key::Space)) = evt.press_args() {
@@ -111,15 +118,19 @@ fn main() {
             window.draw_2d(&evt, |c, g| {
                 clear(BG_COLOR, g);
             });
-
-            // Emulator rendering
+            
+            // Emulator rendering (does nothing for now, look below)
             emu.render(&r, &mut window, &mut framebuffer, &evt);
 
-            // TODO: Move this to the above call
+            // TODO: Move these to the above call
+            // Update the framebuffer
+            UpdateTexture::update(&mut framebuffer, &mut window.encoder, Format::Rgba8, &*emu.mem.gpu.image_data, [0,0], [160, 144]);
+            // Draw the screen
             window.draw_2d(&evt, |c, g| {
                 emu.mem.gpu.img.draw(&framebuffer, &c.draw_state, c.transform, g);
             });
 
+            // TODO: Move to seperate module (debugger.rs)
             // Debugger rendering
             if emu.cpu.is_debugging {
                 let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu.cpu);
@@ -128,7 +139,6 @@ fn main() {
                 dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));
                 
                 // Split lines and place them appropriately
-                // TODO: Possibly use anchors for text placement
                 let dbg_lines = dbg_string.split('\n');
                 for (line_n, line) in dbg_lines.enumerate() {
                     text.add(
@@ -143,7 +153,6 @@ fn main() {
                 }
                 window.draw_2d(&evt, |c, g| {
                     text.draw(&mut g.encoder, &output_color);
-                    //framebuffer.draw(&mut g.encoder, &output_color);
                 });
             }
         }

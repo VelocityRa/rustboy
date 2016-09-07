@@ -155,7 +155,7 @@ impl Gpu {
         };
         
         for i in 0..HEIGHT * WIDTH * 4 {
-            gpu.image_data[(i) as usize] = rand::random();
+            gpu.image_data[(i) as usize] = 0; //rand::random();
         }
 
         // for y in 0..HEIGHT {
@@ -183,10 +183,30 @@ impl Gpu {
         // });
     }
 
+    fn set_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8, ) {
+        let first_byte = 4 * (x + (y * 160)) as usize;
+
+        self.image_data[first_byte] = r;      // R
+        self.image_data[first_byte+1] = g;    // G
+        self.image_data[first_byte+2] = b;    // B
+        self.image_data[first_byte+3] = 255;    // A
+    }
+
     pub fn update(&mut self) {
-        for i in 0..HEIGHT * WIDTH * 4 {
-            self.image_data[(i) as usize] = rand::random();
-        }
+
+        // Debug code
+
+        // Randomize one random pixel
+        let x = (rand::random::<u64>() % 160) as usize;
+        let y = (rand::random::<u64>() % 144) as usize;
+        self.set_pixel(x, y, 255, 255, 255);
+
+        // Randomize every pixel
+        // for i in 0..HEIGHT * WIDTH * 4 {
+        //     self.image_data[(i) as usize] = rand::random();
+        // }
+
+        // self.clock += 1;
     }
 
     pub fn rb(&self, addr: u16) -> u8 {

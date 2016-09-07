@@ -47,6 +47,7 @@ impl Emulator {
     // Update state
     // Gets called once a frame
     pub fn update(&mut self, args: &UpdateArgs) {
+
         // If is_stepping is false, runs for a frame (~70k clock cycles)
         // If it's true runs for just 1 instruction
         let mut temp_total_cycles = 0;
@@ -58,8 +59,11 @@ impl Emulator {
             temp_total_cycles += cycles;
 
             if self.cpu.get_regs().stop {self.cpu.stop(); return; }
-            if self.cpu.is_stepping { return; }
+            if self.cpu.is_stepping { break; }
         }
+        
+        // Update gpu image data
+        self.mem.gpu.update();
     }
 
     pub fn read_header(&mut self) {
