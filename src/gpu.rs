@@ -1,19 +1,15 @@
 //
 //      Graphics Processing Unit
 //
-use std::mem;
-use std::iter;
+#[allow(dead_code)] 
+
 use rand;
 
 use cpu::Interrupt;
 
 use piston::input;
-use piston_window;
 use piston_window::*;
-use gfx_core::Resources;
-use gfx_device_gl::Resources as R;
 use graphics::types::SourceRectangle;
-use image::{ImageBuffer, Pixel, Rgb};
 
 const VRAM_SIZE: usize = 8 << 10; // 8K
 const OAM_SIZE: usize = 0xa0;     // 0xfe00 - 0xfe9f is OAM
@@ -189,7 +185,7 @@ impl Gpu {
         self.image_data[first_byte] = r;      // R
         self.image_data[first_byte+1] = g;    // G
         self.image_data[first_byte+2] = b;    // B
-        self.image_data[first_byte+3] = 255;    // A
+        self.image_data[first_byte+3] = 255;  // A
     }
 
     pub fn update(&mut self) {

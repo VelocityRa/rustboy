@@ -1,4 +1,6 @@
 #![feature(type_macros)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 extern crate piston;
 extern crate graphics;
@@ -19,13 +21,11 @@ use glutin_window::GlutinWindow;
 use graphics::clear;
 
 //use piston_window::*;
-use piston_window::{OpenGL, PistonWindow, WindowSettings, Image, Texture};
+use piston_window::{OpenGL, PistonWindow, WindowSettings, Texture};
 //use graphics::*;
-use image::{ImageBuffer, Pixel, Rgb};
 use piston::event_loop::EventLoop;
 use piston::window::AdvancedWindow;
 use piston::input::*;
-use graphics::types::SourceRectangle;
 
 use texture::*;
 
@@ -42,7 +42,7 @@ mod timer;
 const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
-const SCREEN_MULT: u32 = 3;
+const SCREEN_MULT: u32 = 4;
 const BG_COLOR: [f32; 4] = [2./255., 22./255., 49./255., 1.0];
 const TEXT_COLOR: [f32; 4] = [14./255., 54./255., 98./255., 1.0];
 const TEXT_TITLE_COLOR: [f32; 4] = [0./255., 25./255., 65./255., 1.0];
@@ -91,7 +91,9 @@ fn main() {
         .with_font("resources/fonts/joystix monospace.ttf")
         .build().unwrap();
 
-    let ts = TextureSettings::new().compress(false).generate_mipmap(false).filter(texture::Filter::Nearest);
+    let ts = TextureSettings::new().filter(texture::Filter::Nearest).compress(false).generate_mipmap(false);
+
+    debug!("{:?}", ts.get_filter());
 
     let mut framebuffer = match
         Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, [160, 144], &ts) {
@@ -124,10 +126,14 @@ fn main() {
 
             // TODO: Move these to the above call
             // Update the framebuffer
-            UpdateTexture::update(&mut framebuffer, &mut window.encoder, Format::Rgba8, &*emu.mem.gpu.image_data, [0,0], [160, 144]);
+            UpdateTexture::update(&mut framebuffer, &mut window.encoder, Format::Rgba8,
+                &*emu.mem.gpu.image_data, [0,0], [160, 144]).unwrap();
             // Draw the screen
             window.draw_2d(&evt, |c, g| {
-                emu.mem.gpu.img.draw(&framebuffer, &c.draw_state, c.transform, g);
+                use graphics::Transformed;
+
+                emu.mem.gpu.img.draw(&framebuffer, &c.draw_state, 
+                    c.transform.scale(SCREEN_MULT as f64, SCREEN_MULT as f64), g);
             });
 
             // TODO: Move to seperate module (debugger.rs)
@@ -152,7 +158,7 @@ fn main() {
                     );
                 }
                 window.draw_2d(&evt, |c, g| {
-                    text.draw(&mut g.encoder, &output_color);
+                    text.draw(&mut g.encoder, &output_color).unwrap();
                 });
             }
         }

@@ -511,12 +511,12 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xff => rst!(0x38),                                         // rst_38
 
         _ => {
-            error!("Unknown instruction opcode: {:02X}", inst); 0
+            error!("Unknown instruction opcode: {:02X}", inst);
         },
     }
 }
 
-fn xx() -> u32 { panic!("Invalid instruction opcode"); 0 }
+fn xx() -> u32 { panic!("Invalid instruction opcode"); }
 
 fn add_signed(a: u16, b: u8) -> u16 {
     (a as i16 + (b as i8 as i16)) as u16

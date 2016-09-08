@@ -9,7 +9,6 @@ use std::path::Path;
 
 use cpu::Cpu;
 use mmu::Memory;
-use gpu::Gpu;
 use cartridge::*;
 
 // Clock cycles between every screen refresh 
