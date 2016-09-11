@@ -1,10 +1,9 @@
-#![feature(type_macros)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
 extern crate piston;
 extern crate graphics;
-extern crate glutin_window;
+extern crate glfw_window;
 extern crate gfx_graphics;
 extern crate gfx;
 extern crate gfx_core;
@@ -17,16 +16,13 @@ extern crate rand;
 
 use std::env;
 
-use glutin_window::GlutinWindow;
-use graphics::clear;
-
-//use piston_window::*;
 use piston_window::{OpenGL, PistonWindow, WindowSettings, Texture};
-//use graphics::*;
-use piston::event_loop::EventLoop;
+use glfw_window::GlfwWindow;
 use piston::window::AdvancedWindow;
+use piston::event_loop::EventLoop;
 use piston::input::*;
 
+use graphics::clear;
 use texture::*;
 
 #[macro_use]
@@ -63,12 +59,13 @@ fn main() {
                 USAGE: rustboy <path/to/rom>"),
     }
 
-    let mut window: PistonWindow<GlutinWindow> = 
+    let mut window: PistonWindow<GlfwWindow> = 
         WindowSettings::new(
             WINDOW_TITLE,
             SCREEN_DIMS,
         )
         .opengl(OPENGL)
+        .resizable(false)
         .build()
         .unwrap();
     window.set_max_fps(60);
@@ -77,10 +74,9 @@ fn main() {
     let mut emu = emulator::Emulator::new(&window, rom_path);
 
     emu.read_header();
-
     // Append game name to title
     window.set_title(
-        format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title())
+       String::from(format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title()))
     );
 
     let output_color = window.output_color.clone();
@@ -92,11 +88,8 @@ fn main() {
         .build().unwrap();
 
     let ts = TextureSettings::new().filter(texture::Filter::Nearest).compress(false).generate_mipmap(false);
-
-    debug!("{:?}", ts.get_filter());
-
     let mut framebuffer = match
-        Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, [160, 144], &ts) {
+        Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, NATIVE_DIMS, &ts) {
             Ok(fb) => fb,
             Err(e) => panic!("Couldn't create framebuffer texture"),
         };
@@ -127,7 +120,7 @@ fn main() {
             // TODO: Move these to the above call
             // Update the framebuffer
             UpdateTexture::update(&mut framebuffer, &mut window.encoder, Format::Rgba8,
-                &*emu.mem.gpu.image_data, [0,0], [160, 144]).unwrap();
+                &*emu.mem.gpu.image_data, [0,0], NATIVE_DIMS).unwrap();
             // Draw the screen
             window.draw_2d(&evt, |c, g| {
                 use graphics::Transformed;

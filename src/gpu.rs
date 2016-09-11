@@ -110,7 +110,7 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    pub fn new(window: &PistonWindow) -> Gpu {
+    pub fn new<W: Window>(window: &PistonWindow<W>) -> Gpu {
         let mut gpu: Gpu = Gpu {
             image_data: Box::new([255; HEIGHT * WIDTH * 4]),
             oam: [0; OAM_SIZE],
@@ -146,8 +146,6 @@ impl Gpu {
                 let r: SourceRectangle = [0, 0, ::SCREEN_DIMS[0] as i32, ::SCREEN_DIMS[1] as i32];
                 Image::new().src_rect(r)
             }
-
-
         };
         
         for i in 0..HEIGHT * WIDTH * 4 {
@@ -162,7 +160,7 @@ impl Gpu {
         gpu
     }
 
-    pub fn display(&mut self, window: &mut PistonWindow, evt: &input::Event) {
+    pub fn display<W: Window>(&mut self, window: &mut PistonWindow<W>, evt: &input::Event) {
         //self.update();
         
         // window.draw_2d(&evt, |c, g| {

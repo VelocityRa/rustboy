@@ -23,6 +23,7 @@
 
 #![allow(dead_code)]
 
+use piston::window::Window;
 use piston_window::PistonWindow;
 
 use timer::Timer;
@@ -50,7 +51,7 @@ pub struct Memory {
 impl Memory {
     // Allocate a 64k byte array and zero initialize it
     // This is all the system's RAM
-    pub fn new(window: &PistonWindow) -> Memory {
+    pub fn new<W: Window>(window: &PistonWindow<W>) -> Memory {
         let mut mem = Memory {
             if_: 0u8,
             ie_: 0u8,

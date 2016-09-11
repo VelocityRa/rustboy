@@ -63,7 +63,7 @@ impl CartridgeHeader {
         use std::env;
         
         let args: Vec<_> = env::args().collect();
-        String::from(
+        let mut title = String::from(
             match str::from_utf8(&self.game_title) {
                 Ok(val) => val,
                 Err(err) => {
@@ -71,7 +71,11 @@ impl CartridgeHeader {
                     &args[1]
                 }
             }
-        )
+        );
+        // Get rid of trailing null values
+        let end_offset = title.find('\0').unwrap_or(title.len());
+        title.drain(end_offset..).collect::<String>();
+        title
     }
 }
 

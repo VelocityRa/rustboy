@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io;
 use std::path::Path;
+use piston::window::Window;
 
 use cpu::Cpu;
 use mmu::Memory;
@@ -21,7 +22,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(window: &PistonWindow, rom_path: &String) -> Emulator {
+    pub fn new<W: Window>(window: &PistonWindow<W>, rom_path: &String) -> Emulator {
         let mut emu = Emulator {
             cpu: Cpu::new(),
             mem: Memory::new(window),
@@ -38,8 +39,7 @@ impl Emulator {
     }
 
     // Render screen
-    pub fn render(&mut self, args: &RenderArgs, window: &mut PistonWindow, framebuffer: &mut Texture<R>, evt: &Event) {
-
+    pub fn render<W: Window>(&mut self, args: &RenderArgs, window: &mut PistonWindow<W>, framebuffer: &mut Texture<R>, evt: &Event) {
         self.mem.gpu.display(window, evt);
     }
 
