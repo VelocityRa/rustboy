@@ -5,15 +5,21 @@ authors = ["VelocityRa <makren67@gmail.com>"]
 
 
 [dependencies]
+
+log = "*"
+env_logger = "*"
+image = "*"
+rand = "*"
+
+glutin = "0.6.0"
 piston = "*"
 piston_window = "*"
+piston-texture = "*"
 piston2d-graphics = "*"
 piston2d-gfx_graphics = "*" 
 pistoncore-glfw_window = "*"
+
 gfx = "*"
 gfx_core = "*"
 gfx_device_gl = "*"
 gfx_text = "*"
-image = "*"
-piston-texture = "*"
-rand = "*"
