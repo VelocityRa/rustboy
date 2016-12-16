@@ -70,20 +70,23 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! inc (
         ($reg:ident) => ({
-            r.$reg.wrapping_add(1);
+            r.$reg = r.$reg.wrapping_add(1);
+            r.f.h.unset();
+            r.f.z.unset();
+            r.f.n.set();
             if r.$reg == 0 {r.f.z.set()};
             if r.$reg & 0xF == 0 {r.f.h.set()};
         1 }) );
 
     macro_rules! inc_16( 
         ($reg1:ident, $reg2: ident) => ({
-            r.$reg2 += 1;
-            if r.$reg2 == 0 { r.$reg1 += 1; }
+            r.$reg2 = r.$reg2.wrapping_add(1);
+            if r.$reg2 == 0 { r.$reg1 = r.$reg1.wrapping_add(1); }
         2 }) );
 
     macro_rules! dec (
         ($reg:ident) => ({
-            r.$reg.wrapping_sub(1);
+            r.$reg = r.$reg.wrapping_sub(1);
             r.f.h.unset();
             r.f.z.unset();
             r.f.n.set();
@@ -91,10 +94,10 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
             if r.$reg & 0xF == 0xF {r.f.h.set()};
         1 }) );
 
-    macro_rules! dec_16( 
+    macro_rules! dec_16(
         ($reg1:ident, $reg2: ident) => ({
-            r.$reg2 -= 1;
-            if r.$reg2 == 0xFF { r.$reg1 -= 1; }
+            r.$reg2 = r.$reg2.wrapping_sub(1);
+            if r.$reg2 == 0xFF { r.$reg1 = r.$reg1.wrapping_sub(1); }
         2 }) );
 
     macro_rules! rst (
@@ -183,7 +186,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.n.unset();
         r.f.h.set_if((i & 0xF) + (j & 0xF) > 0xF);
         r.f.c.set_if((i as u16 + j as u16) > 0xFF);
-        r.a = i + j;
+        r.a = i.wrapping_add(j);
         r.f.z.set_if(r.a == 0);
     1 }) );
 
@@ -193,7 +196,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let b = $reg;
         r.f.c.set_if(a < b);
         r.f.h.set_if((a & 0xF) < (b & 0xF));
-        r.a = a - b;
+        r.a = a.wrapping_sub(b);
         r.f.z.set_if(r.a == 0);
     1 }) );
 
@@ -205,7 +208,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.n.unset();
         r.f.h.set_if((i & 0xF) + (j & 0xF) + c > 0xF);
         r.f.c.set_if((i as u16 + j as u16 + c as u16) > 0xFF);
-        r.a = i + j + c;
+        r.a = i.wrapping_add(j).wrapping_add(c);
         r.f.z.set_if(r.a == 0);
     1 }) );
 
@@ -216,7 +219,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let c = if r.f.c.get() {1} else {0};
         r.f.c.set_if(a < b + c);
         r.f.h.set_if((a & 0xF) < (b & 0xF) + c);
-        r.a = (a - b - c) as u8;
+        r.a = (a.wrapping_sub(b).wrapping_sub(c)) as u8;
         r.f.z.set_if(r.a == 0);
     1 }) );
 
