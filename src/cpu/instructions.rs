@@ -49,8 +49,9 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         2 }) );
 
     macro_rules! jp (
-        () => ({debug!("JUMP to {:04X}", m.rw(r.pc));
-            r.pc = m.rw(r.pc);
+        () => ({
+            let j_addr = m.rw(r.pc);
+            r.pc = j_addr;
         4 }) );
 
     macro_rules! jp_n (
@@ -59,9 +60,9 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! jr (
         () => ({
-            let target = add_signed(r.pc, m.rb(r.bump()));
-            debug!("JUMP(REL) to {:04X}", target);
-            r.pc = target + 1;
+            let target = add_signed(r.pc, m.rb(r.bump())) + 1;
+            //debug!("JUMP(REL) to {:04X}", target);
+            r.pc = target;
         3 }) );
 
     macro_rules! jr_n {
@@ -102,12 +103,9 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! rst (
     ($e:expr) => ({
-        debug!("RST sp: {:04X} pc: {:04X}", r.sp, r.pc);
         r.sp -= 2;
         m.ww(r.sp, r.pc + 1);
-        debug!("RST sp: {:04X} pc: {:04X}", r.sp, r.pc);
         r.pc = $e;
-        debug!("RST pc: {:04X}", r.pc);
     4 }) );
 
     macro_rules! xor_a (
@@ -142,6 +140,23 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         if (r.a & 0xF) < (v & 0xF) {r.f.h.set()} else {r.f.h.unset()};
         //debug!("{:02X} & 0xF < ({:2X} & 0xF)    c:{:?} h:{:?} ", r.a, v, r.f.c.get(),r.f.h.get());
     4 }) );
+
+    macro_rules! rl( ($reg:expr, $cy:expr) => ({
+        let ci = if r.f.c.get() {1} else {0};
+        let co = $reg & 0x80;
+        $reg = ($reg << 1) | ci;
+        r.f.reset();
+        if co != 0 { r.f.c.set() };
+        $cy
+    }) );
+
+    macro_rules! rr( ($reg:expr, $cy:expr) => ({
+        let ci = if r.f.c.get() {0x80} else {0};
+        let co = $reg & 1;
+        $reg = ($reg >> 1) | ci;
+        if co == 1 { r.f.c.set() };
+        $cy
+    }) );
 
     macro_rules! rlc (
     ($reg:ident, $n:expr) => ({
@@ -223,6 +238,17 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.z.set_if(r.a == 0);
     1 }) );
 
+    macro_rules! ld_hlspn (
+    () => ({
+        let b = m.rb(r.bump()) as i8 as i16 as u16;
+        let res = b.wrapping_add(r.sp);
+        r.h = (res >> 8) as u8;
+        r.l = res as u8;
+        let tmp = b ^ r.sp ^ r.hl();
+        if tmp & 0x100 != 0 {r.f.c.set()};
+        if tmp & 0x010 != 0 {r.f.h.set()};
+    3 }) );
+
     // TODO: use set_or_else for everything
 
     // macro_rules! rl (
@@ -263,7 +289,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x14 => inc!(d),                                            // inc_d
         0x15 => dec!(d),                                            // dec_d
         0x16 => ld_n!(d),                                           // ld_dn
-        // 0x17 => rl!(r.a, 1),                                        // rla
+        0x17 => rl!(r.a, 1),                                        // rla
         0x18 => jr!(),                                              // jr_n
         0x19 => add_hl!(r.de()),                                    // add_hlde
         0x1a => { r.a = m.rb(r.de()); 2 }                           // ld_ade
@@ -271,11 +297,11 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x1c => inc!(e),                                            // inc_e
         0x1d => dec!(e),                                            // dec_e
         0x1e => ld_n!(e),                                           // ld_en
-        // 0x1f => rr!(r.a, 1),                                        // rr_a
+        0x1f => rr!(r.a, 1),                                        // rr_a
 
         0x20 => jr_n!(!r.f.z.get()),                                // jr_nz_n
         0x21 => ld_nn!(h, l),                                       // ld_hlnn
-        0x22 => { m.wb(r.hl(), r.a); r.hlpp(); 2 },                 // ld_hlma
+        0x22 => { m.wb(r.hl(), r.a); r.inc_hl(); 2 },                 // ld_hlma
         0x23 => inc_16!(h, l),                                      // inc_hl
         0x24 => inc!(h),                                            // inc_h
         0x25 => dec!(h),                                            // dec_h
@@ -283,7 +309,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         // 0x27 => { daa(r); 1 },                                      // daa
         0x28 => jr_n!(r.f.z.get()),                                 // jr_z_n
         0x29 => add_hl!(r.hl()),                                    // add_hlhl
-        0x2a => { r.a = m.rb(r.hl()); r.hlpp(); 2 },                // ldi_ahlm
+        0x2a => { r.a = m.rb(r.hl()); r.inc_hl(); 2 },                // ldi_ahlm
         0x2b => dec_16!(h, l),                                      // dec_hl
         0x2c => inc!(l),                                            // inc_l
         0x2d => dec!(l),                                            // dec_l
@@ -293,7 +319,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
         0x30 => jr_n!(!r.f.c.get()),                                // jr_nc_n
         0x31 => { r.sp = m.rw(r.pc); r.pc += 2; 3 } // ld_spnn
-        0x32 => { m.wb(r.hl(), r.a); r.hlmm(); 2 }                  // ldd_hlma
+        0x32 => { m.wb(r.hl(), r.a); r.dec_hl(); 2 }                  // ldd_hlma
         0x33 => { r.sp += 1; 2 }                                    // inc_sp
         0x34 => { r.inc_hlm(m); 3 }                                 // inc_hlm
         0x35 => { r.dec_hlm(m); 3 }                                 // dec_hlm
@@ -302,7 +328,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
             r.f.c.set(); 1 }                          // scf
         0x38 => jr_n!(r.f.c.get()),                                 // jr_c_n
         0x39 => { r.add_hlsp(); 2 }                                  // add_hlsp
-        0x3a => { r.a = m.rb(r.hl()); r.hlmm(); 2 }                 // ldd_ahlm
+        0x3a => { r.a = m.rb(r.hl()); r.dec_hl(); 2 }                 // ldd_ahlm
         0x3b => { r.sp -= 1; 2 }                                    // dec_sp
         0x3c => inc!(a),                                            // inc_a
         0x3d => dec!(a),                                            // dec_a
@@ -504,7 +530,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xf5 => push!(af),                                        // push_af
         0xf6 => { or_a!(m.rb(r.bump())); 2 }                        // or_an
         0xf7 => rst!(0x30),                                         // rst_30
-        // 0xf8 => { ld_hlspn(r, m); 3 }                               // ld_hlspn
+        0xf8 => { ld_hlspn!() }                               // ld_hlspn
         0xf9 => { r.sp = r.hl(); 2 }                                // ld_sphl
         0xfa => { r.a = m.rb(m.rw(r.pc)); r.pc += 2; 4 }            // ld_ann
         0xfb => { r.ei(m); 1 }                                      // ei
