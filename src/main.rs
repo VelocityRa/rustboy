@@ -1,18 +1,21 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-extern crate piston;
-extern crate graphics;
-extern crate glfw_window;
-extern crate gfx_graphics;
-extern crate gfx;
-extern crate gfx_core;
-extern crate gfx_text;
-extern crate gfx_device_gl;
-extern crate piston_window;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 extern crate image;
 extern crate texture;
 extern crate rand;
+extern crate piston;
+extern crate piston_window;
+extern crate graphics;
+extern crate glfw_window;
+extern crate gfx;
+extern crate gfx_core;
+extern crate gfx_graphics;
+extern crate gfx_device_gl;
+extern crate gfx_text;
 
 use std::env;
 
@@ -39,9 +42,9 @@ const OPENGL: OpenGL = OpenGL::V3_2;
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
 const SCREEN_MULT: u32 = 4;
-const BG_COLOR: [f32; 4] = [2./255., 22./255., 49./255., 1.0];
-const TEXT_COLOR: [f32; 4] = [14./255., 54./255., 98./255., 1.0];
-const TEXT_TITLE_COLOR: [f32; 4] = [0./255., 25./255., 65./255., 1.0];
+const BG_COLOR: [f32; 4] = [5./255., 36./255., 5./255., 1.0];
+const TEXT_COLOR: [f32; 4] = [255./255., 255./255., 255./255., 1.0];
+const TEXT_TITLE_COLOR: [f32; 4] = [210./255., 210./255., 210./255., 1.0];
 
 const NATIVE_DIMS: [u32; 2] = [160, 144];
 const SCREEN_DIMS: [u32; 2] = [NATIVE_DIMS[0] * SCREEN_MULT, 
