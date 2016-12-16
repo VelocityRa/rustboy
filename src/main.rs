@@ -87,6 +87,11 @@ fn main() {
         .with_font("resources/fonts/joystix monospace.ttf")
         .build().unwrap();
 
+    let mut text_shadow = gfx_text::new(window.factory.clone())
+        .with_size(FONT_SIZE)
+        .with_font("resources/fonts/joystix monospace.ttf")
+        .build().unwrap();
+
     let ts = TextureSettings::new().filter(texture::Filter::Nearest).compress(false).generate_mipmap(false);
     let mut framebuffer = match
         Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, NATIVE_DIMS, &ts) {
@@ -96,7 +101,7 @@ fn main() {
 
     // Main Event Loop
     while let Some(evt) = window.next() {
-        // debug!("EVENT: {:?}", evt);
+        //debug!("EVENT: {:?}", evt);
 
         // Space to pause/unpause emulation
         if let Some(Button::Keyboard(Key::Space)) = evt.press_args() {
@@ -149,8 +154,14 @@ fn main() {
                             TEXT_COLOR
                         },
                     );
+                    text_shadow.add(
+                        line,
+                        [10 + 2, 10 + 2 + line_n as i32 * FONT_SIZE as i32 + 1],
+                        [0., 0., 0., 1.]
+                    );
                 }
                 window.draw_2d(&evt, |c, g| {
+                    text_shadow.draw(&mut g.encoder, &output_color).unwrap();
                     text.draw(&mut g.encoder, &output_color).unwrap();
                 });
             }
