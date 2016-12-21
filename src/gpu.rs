@@ -434,7 +434,7 @@ impl Gpu {
         let mapbase = mapbase + ((line % 256) >> 3) * 32;
 
         // X and Y location inside the tile itself to paint
-        let y = (self.ly + self.scy) % 8;
+        let y = (self.ly.wrapping_add(self.scy)) % 8;
         let mut x = self.scx % 8;
 
         // Offset into the canvas to draw. line * width * 4 colors

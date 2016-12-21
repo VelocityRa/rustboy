@@ -76,7 +76,7 @@ impl Timer {
 
         // Increment the DIV timer as necessary (1/64th the speed)
         while self.clock.div >= 64 {
-            self.div.wrapping_add(1);
+            self.div = self.div.wrapping_add(1);
             self.clock.div -= 64;
         }
 
@@ -84,7 +84,7 @@ impl Timer {
         if self.tac & 0x4 != 0 {
             self.clock.tima += ticks;
             while self.clock.tima >= self.tima_speed {
-                self.tima += 1;
+                self.tima = self.tima.wrapping_add(1);
                 if self.tima == 0 {
                     self.tima = self.tma;
                     *if_ |= Interrupt::Timer as u8;

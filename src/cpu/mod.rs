@@ -103,15 +103,17 @@ impl Registers {
 
     fn hlpp(&mut self) {
         self.l.wrapping_add(1);
+        self.l = self.l.wrapping_add(1);
         if self.l == 0 {
-            self.h.wrapping_add(1);
+            self.h = self.h.wrapping_add(1);
         }
     }
 
     fn hlmm(&mut self) {
         self.l.wrapping_sub(1);
+        self.l = self.l.wrapping_sub(1);
         if self.l == 0xff {
-            self.h.wrapping_sub(1);
+            self.h = self.h.wrapping_sub(1);
         }
     }
 
