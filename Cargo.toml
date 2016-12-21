@@ -10,6 +10,7 @@ log = "*"
 env_logger = "*"
 image = "*"
 rand = "*"
+colored = "1.3"
 
 glutin = "0.6.0"
 piston = "*"
@@ -23,3 +24,7 @@ gfx = "*"
 gfx_core = "*"
 gfx_device_gl = "*"
 gfx_text = "*"
+
+
+[profile.release]
+debug = true
