@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate colored;
 extern crate image;
 extern crate texture;
 extern crate rand;
@@ -18,6 +19,9 @@ extern crate gfx_device_gl;
 extern crate gfx_text;
 
 use std::env;
+use env_logger::LogBuilder;
+use log::LogRecord;
+use colored::*;
 
 use piston_window::{OpenGL, PistonWindow, WindowSettings, Texture};
 use glfw_window::GlfwWindow;
@@ -28,9 +32,6 @@ use piston::input::*;
 use graphics::clear;
 use texture::*;
 
-#[macro_use]
-mod logger;
-
 mod cpu;
 mod gpu;
 mod mmu;
@@ -39,6 +40,8 @@ mod emulator;
 mod timer;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
+static DEFAULT_LOG_LEVEL: &'static str = "info";
+static DEFAULT_LOG_LEVELS: &'static str = "gfx_device_gl=warn,cargo=error";
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
 const SCREEN_MULT: u32 = 4;
@@ -53,15 +56,41 @@ const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
 
 
 fn main() {
+
+    // Logging stuff
+    let format = |record: &LogRecord| {
+        use log::LogLevel;
+
+        let level = record.level();
+        let level_str = level.to_string();
+        let coloured_level = match level {
+            LogLevel::Trace => level_str.white(),
+            LogLevel::Debug => level_str.green(),
+            LogLevel::Info => level_str.blue(),
+            LogLevel::Warn => level_str.yellow().bold(),
+            LogLevel::Error => level_str.red().bold(),
+        };
+        let record_loc = &record.location().file()[4..];
+        format!("[{}][{}]: {}", coloured_level, record_loc.cyan(), record.args())
+    };
+    let mut builder = LogBuilder::new();
+    builder.format(format);
+    builder.parse(&format!("{},{}", DEFAULT_LOG_LEVEL, DEFAULT_LOG_LEVELS));
+    builder.init().unwrap();
+
+    // Argument parsing
     let args: Vec<_> = env::args().collect();
     let rom_path: &String;
 
     match args.len() {
         2 => rom_path = &args[1],
-        _ => panic!("No arguments provided.
-                USAGE: rustboy <path/to/rom>"),
+        _ => {
+            error!("No arguments provided.\nUSAGE: rustboy-emu <path/to/rom>");
+            return;
+        },
     }
 
+    // Window creation
     let mut window: PistonWindow<GlfwWindow> = 
         WindowSettings::new(
             WINDOW_TITLE,
@@ -74,9 +103,10 @@ fn main() {
     window.set_max_fps(60);
     window.set_ups(60);
 
+    // Initialize emulator
     let mut emu = emulator::Emulator::new(&window, rom_path);
-
     emu.read_header();
+
     // Append game name to title
     window.set_title(
        String::from(format!("{} - {}", WINDOW_TITLE, emu.rom_header.get_game_title()))
@@ -84,23 +114,21 @@ fn main() {
 
     let output_color = window.output_color.clone();
 
-    // Initialize text renderer.
-    let mut text = gfx_text::new(window.factory.clone())
-        .with_size(FONT_SIZE)
-        .with_font("resources/fonts/joystix monospace.ttf")
-        .build().unwrap();
+    // Initialize text renderers
+    macro_rules! make_font(
+    () => (gfx_text::new(window.factory.clone())
+            .with_size(FONT_SIZE)
+            .with_font("resources/fonts/joystix monospace.ttf")
+            .build().unwrap();
+    ));
+    let mut text = make_font!();
+    let mut text_shadow = make_font!();
 
-    let mut text_shadow = gfx_text::new(window.factory.clone())
-        .with_size(FONT_SIZE)
-        .with_font("resources/fonts/joystix monospace.ttf")
-        .build().unwrap();
-
+    // Set up framebuffer
     let ts = TextureSettings::new().filter(texture::Filter::Nearest).compress(false).generate_mipmap(false);
-    let mut framebuffer = match
-        Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, NATIVE_DIMS, &ts) {
-            Ok(fb) => fb,
-            Err(e) => panic!("Couldn't create framebuffer texture"),
-        };
+    let mut framebuffer =
+        Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, NATIVE_DIMS, &ts)
+        .expect("Couldn't create framebuffer texture");
 
     // Main Event Loop
     while let Some(evt) = window.next() {
@@ -116,14 +144,15 @@ fn main() {
             emu.toggle_debugging();
         }
 
-        if let Some(r) = evt.render_args() {
+        if let Event::Render(_) = evt {
+            //println!("RENDER: {}", emu.frame_count);
             // Draw BG
             window.draw_2d(&evt, |c, g| {
                 clear(BG_COLOR, g);
             });
             
             // Emulator rendering (does nothing for now, look below)
-            emu.render(&r, &mut window, &mut framebuffer, &evt);
+            //emu.render(&r, &mut window, &mut framebuffer, &evt);
 
             // TODO: Move these to the above call
             // Update the framebuffer
@@ -171,7 +200,9 @@ fn main() {
         }
 
         if let Some(u) = evt.update_args() {
+            //println!("UPDATE: {}", emu.frame_count);
             if emu.is_running() {
+                debug!("FRAME START: {}", emu.frame_count);
                 emu.update(&u);
             }
         }
