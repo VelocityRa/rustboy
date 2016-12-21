@@ -19,24 +19,22 @@ const NUM_TILES: usize = 192;     // number of in-memory tiles
 pub const HEIGHT: usize = 144;
 pub const WIDTH: usize = 160;
 
-
 pub type Color = [u8; 4];
 
 const PIXEL_COLOR: Color = [40, 88, 200, 255];
 
-// Most of the code here is from jba
-
-// Palette for the monochrome GB. Possible values are:
-//
-// 0 - white
-// 1 - light gray
-// 2 - dark gray
-// 3 - black
-const PALETTE: [Color; 4] = [
+const PALETTE_BW: [Color; 4] = [
     [255, 255, 255, 255],
     [192, 192, 192, 255],
     [ 96,  96,  96, 255],
     [  0,   0,   0, 255],
+];
+
+const PALETTE_GREEN: [Color; 4] = [
+    [155, 188, 15, 255],
+    [139, 172, 15, 255],
+    [ 48,  98, 48, 255],
+    [ 15,  56, 15, 255],
 ];
 
 struct Tiles {
@@ -57,7 +55,7 @@ pub struct Gpu {
 
     clock: u32,
 
-    vrambanks: Box<[[u8; VRAM_SIZE]; 2]>,
+    pub vrambanks: Box<[[u8; VRAM_SIZE]; 2]>,
     // Selected vram bank
     vrambank: u8,
 
@@ -137,13 +135,13 @@ impl Gpu {
             }),
 
             tiles: Box::new(Tiles {
-                need_update: false,
-                to_update: [false;  NUM_TILES * 2],
+                need_update: true,  // Does this need to be true?
+                to_update: [true;  NUM_TILES * 2],
                 data: [[[0; 8]; 8]; NUM_TILES * 2],
             }),
 
             img: {
-                let r: SourceRectangle = [0, 0, ::SCREEN_DIMS[0] as i32, ::SCREEN_DIMS[1] as i32];
+                let r: SourceRectangle = [0.0, 0.0, ::SCREEN_DIMS[0] as f64, ::SCREEN_DIMS[1] as f64];
                 Image::new().src_rect(r)
             }
         };
@@ -191,9 +189,9 @@ impl Gpu {
         // Debug code
 
         // Randomize one random pixel
-        let x = (rand::random::<u64>() % 160) as usize;
-        let y = (rand::random::<u64>() % 144) as usize;
-        self.set_pixel(x, y, 255, 255, 255);
+        //let x = (rand::random::<u64>() % 160) as usize;
+        //let y = (rand::random::<u64>() % 144) as usize;
+        //self.set_pixel(x, y, 255, 255, 255);
 
         // Randomize every pixel
         // for i in 0..HEIGHT * WIDTH * 4 {
@@ -202,10 +200,32 @@ impl Gpu {
 
         // self.clock += 1;
     }
+    pub fn rb_vram(&self, addr: u16) -> u8 {
+        match addr {
+            0x8000 ... 0x9FFF => self.vrambanks[0][addr as usize - 0x8000],
+            0xA000 ... 0xBFFF => self.vrambanks[1][addr as usize - 0xA000],
+            _ => unreachable!()
+        }
+    }
+
+    pub fn wb_vram(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x8000 ... 0x9FFF => {
+                //trace!("writing to VRAM1 {:04X}  data {:02X}", addr - 0x8000, data);
+                self.vrambanks[0][addr as usize - 0x8000] = data;
+            }
+            0xA000 ... 0xBFFF => {
+                //trace!("writing to VRAM2 {:04X}  data {:02X}", addr - 0xA000 , data);
+                self.vrambanks[1][addr as usize - 0xA000] = data;
+            }
+            _ => unreachable!()
+        }
+    }
 
     pub fn rb(&self, addr: u16) -> u8 {
         match addr & 0xff {
             0x40 => {
+                warn!("BG read {}",self.bgon);
                 ((self.lcdon as u8)    << 7) |
                 ((self.winmap as u8)   << 6) |
                 ((self.winon as u8)    << 5) |
@@ -244,6 +264,7 @@ impl Gpu {
     pub fn wb(&mut self, addr: u16, val: u8) {
         match addr & 0xff {
             0x40 => {
+                warn!("BG write {}  {:02X}",self.bgon, val);
                 let before = self.lcdon;
                 self.lcdon    = (val >> 7) & 1 != 0;
                 self.winmap   = (val >> 6) & 1 != 0;
@@ -278,6 +299,7 @@ impl Gpu {
             0x4a => { self.wy = val; }
             0x4b => { self.wx = val; }
             0x4f => { if self.is_cgb { self.vrambank = val & 1; } }
+
             _ => {}
         }
     }
@@ -300,6 +322,8 @@ impl Gpu {
         if self.clock >= 456 {
             self.clock -= 456;
             self.ly = (self.ly + 1) % 154; // 144 lines tall, 10 for a vblank
+
+            // debug!("Completed an entire line");
 
             if self.ly >= 144 && self.mode != Mode::VBlank {
                 self.switch(Mode::VBlank, if_);
@@ -326,6 +350,7 @@ impl Gpu {
         self.mode = mode;
         match mode {
             Mode::HBlank => {
+                trace!("HBlank! Rendering...");
                 self.render_line();
                 if self.mode0int {
                     *if_ |= Interrupt::LCDStat as u8;
@@ -334,6 +359,7 @@ impl Gpu {
             Mode::VBlank => {
                 // TODO: a frame is ready, it should be put on screen at this
                 // point
+                //debug!("VBlank!");
                 *if_ |= Interrupt::Vblank as u8;
                 if self.mode1int {
                     *if_ |= Interrupt::LCDStat as u8;
@@ -359,7 +385,7 @@ impl Gpu {
             // color number and the second byte is the MSB of the color.
             //
             // For example, for:
-            //      byte 0 : 01011011
+            //      byte 0 : 00011011
             //      byte 1 : 01101010
             //
             // The colors are [0, 2, 2, 1, 3, 0, 3, 1]
@@ -371,6 +397,7 @@ impl Gpu {
                     (self.vrambanks[0][addr], self.vrambanks[0][addr + 1])
                 } else {
                     (self.vrambanks[1][addr], self.vrambanks[1][addr + 1])
+                    //panic!("second VRAM bank used");
                 };
 
                 // LSB is the right-most pixel.
@@ -380,6 +407,8 @@ impl Gpu {
                     msb >>= 1;
                 }
             }
+
+            //debug!("{:?}\t{:?}", i, tiles.data[i]);
         }
     }
 
@@ -398,6 +427,7 @@ impl Gpu {
         let mut scanline = [0u8; WIDTH];
 
         if self.tiles.need_update {
+            info!("Updating tileset...");
             self.update_tileset();
             self.tiles.need_update = false;
         }
@@ -447,8 +477,7 @@ impl Gpu {
         let mut i = 0;
         let tilebase = if !self.tiledata {256} else {0};
 
-        debug!("render background from {:x} {} {}", mapbase, self.scx, self.scy);
-
+        debug!("render background. mapbase:{:x} scx:{} scy:{}", mapbase, self.scx, self.scy);
         loop {
             // Backgrounds wrap around, so calculate the offset into the bgmap
             // each loop to check for wrapping
@@ -465,7 +494,6 @@ impl Gpu {
             if self.is_cgb {
                 panic!("CGB NOT SUPPORTED");
             } else {
-                // Non CGB backgrounds are boring :(
                 row = self.tiles.data[tilebase as usize][y as usize];
                 bgpri = false;
                 hflip = false;
@@ -479,15 +507,25 @@ impl Gpu {
                 // To indicate bg priority, list a color >= 4
                 scanline[i as usize] = if bgpri {4} else {colori};
 
-                self.image_data[coff] = color[0];
-                self.image_data[coff + 1] = color[1];
-                self.image_data[coff + 2] = color[2];
-                self.image_data[coff + 3] = color[3];
+                //self.set_pixel(x as usize, y as usize, color[0], color[1], color[2]);
+
+                let first_byte = coff; // 4 * (x + (y * 160)) as usize;
+
+                self.image_data[first_byte] = color[0];      // R
+                self.image_data[first_byte+1] = color[1];    // G
+                self.image_data[first_byte+2] = color[2];    // B
+                self.image_data[first_byte+3] = color[3];  // A
 
                 x += 1;
                 i += 1;
                 coff += 4;
+
+                //println!("color {:?}", color);
+                //println!("colori {:?}", colori);
             }
+
+            //println!("coff {:?}", coff);
+            //println!("x {:?} y {:?}", x, y);
 
             x = 0;
             if i >= WIDTH as u8 { break }
@@ -522,8 +560,9 @@ struct Palette {
 fn update_pal(pal: &mut [Color; 4], val: u8) {
     // These registers are indices into the actual palette. See
     // http://problemkaputt.de/pandocs.htm#lcdmonochromepalettes
-    pal[0] = PALETTE[((val >> 0) & 0x3) as usize];
-    pal[1] = PALETTE[((val >> 2) & 0x3) as usize];
-    pal[2] = PALETTE[((val >> 4) & 0x3) as usize];
-    pal[3] = PALETTE[((val >> 6) & 0x3) as usize];
+    pal[0] = PALETTE_GREEN[((val >> 0) & 0x3) as usize];
+    pal[1] = PALETTE_GREEN[((val >> 2) & 0x3) as usize];
+    pal[2] = PALETTE_GREEN[((val >> 4) & 0x3) as usize];
+    pal[3] = PALETTE_GREEN[((val >> 6) & 0x3) as usize];
+    info!("BG Color: {:?} val {:02X}", pal, val);
 }
