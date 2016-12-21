@@ -26,6 +26,15 @@ use piston_window::PistonWindow;
 use timer::Timer;
 use gpu::Gpu;
 
+#[derive(PartialEq, Eq)]
+enum Mbc {
+    Mbc1,
+    Mbc2,
+    Mbc3,
+    Mbc4,
+    Unknown,
+}
+
 const START_MAPPED_MEM: usize = 0x8000;
 const MEM_SIZE: usize = 0xFFFF + 1 - START_MAPPED_MEM;
 
@@ -43,6 +52,8 @@ pub struct Memory {
 
     pub timer: Box<Timer>,
     pub gpu: Box<Gpu>,
+
+    mbc: Mbc,
 }
 
 impl Memory {
@@ -58,6 +69,7 @@ impl Memory {
             //rom_header: None,
             timer: Box::new(Timer::new()),
             gpu: Box::new(Gpu::new(window)),
+            mbc: Mbc::Unknown,
         };
         mem.power_on();
         mem
@@ -305,6 +317,11 @@ impl Memory {
                 self.write_byte_raw(addr, data);
             }
         }
+    }
+
+    pub fn find_mbc(&mut self, cartridge_type: u8) {
+        // TODO
+        self.mbc = Mbc::Unknown;
     }
 
     fn debug_print_addr(&self, addr: u16, read: bool) {
