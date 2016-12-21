@@ -223,11 +223,8 @@ macro_rules! rst (
 pub struct Cpu {
     regs: Registers,
     timer: Timer,
-    total_cycles: u32,
-
+    pub total_cycles: u32,
     pub is_running: bool,
-    pub is_stepping: bool,
-    pub is_debugging: bool,
 }
 
 impl Cpu {
@@ -236,14 +233,9 @@ impl Cpu {
             regs: Default::default(),
             timer: Timer::new(),
             total_cycles: 0,
-            is_running: true,
-            is_stepping: false,
-            is_debugging: true,
+            is_running: false,
         };
         cpu.reset_state();
-        // Runs for just 1 instruction every run() call (for debugging)
-        cpu.is_stepping = true;
-
         cpu
     }
 

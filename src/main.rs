@@ -139,8 +139,8 @@ fn main() {
 
             // TODO: Move to seperate module (debugger.rs)
             // Debugger rendering
-            if emu.cpu.is_debugging {
-                let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu.cpu);
+            if emu.is_debugging() {
+                let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu);
                 dbg_string.push_str(&format!("\tRegisters\n{:?}\n\n", emu.cpu.get_regs()));
                 dbg_string.push_str(&format!("\tFlags\n{:?}\n\n", emu.cpu.get_flags()));
                 dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));

@@ -19,6 +19,11 @@ pub struct Emulator {
     pub cpu: Cpu,
     pub mem: Memory,
     pub rom_header: CartridgeHeader,
+
+    is_frame_stepping: bool,
+    is_instr_stepping: bool,
+    is_debugging: bool,
+    pub frame_count: u32,
 }
 
 impl Emulator {
@@ -27,6 +32,10 @@ impl Emulator {
             cpu: Cpu::new(),
             mem: Memory::new(window),
             rom_header: Default::default(),
+            is_frame_stepping: false,
+            is_instr_stepping: false,
+            is_debugging: true,
+            frame_count: 0,
         };
 
         // Read rom and move ownership to memory component
@@ -76,7 +85,9 @@ impl Emulator {
         self.cpu.update_timers(&mut self.mem);
     }
 */
-    #[inline]
+    pub fn is_debugging(&self) -> bool {
+        self.is_debugging
+    }
     pub fn is_running(&self) -> bool {
         self.cpu.is_running
     }
@@ -87,7 +98,7 @@ impl Emulator {
         self.cpu.is_running = !self.cpu.is_running;
     }
     pub fn toggle_debugging(&mut self) {
-        self.cpu.is_debugging = !self.cpu.is_debugging;
+        self.is_debugging = !self.is_debugging;
     }
     
 }
