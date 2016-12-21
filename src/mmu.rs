@@ -35,8 +35,7 @@ enum Mbc {
     Unknown,
 }
 
-const START_MAPPED_MEM: usize = 0x8000;
-const MEM_SIZE: usize = 0xFFFF + 1 - START_MAPPED_MEM;
+const MEM_SIZE: usize = 0xFFFF + 1;
 
 pub struct Memory {
     // Interrupt flags, http://problemkaputt.de/pandocs.htm#interrupts
@@ -44,11 +43,9 @@ pub struct Memory {
     pub if_: u8,
     pub ie_: u8,
 
-    raw_mem: [u8; MEM_SIZE],
+    raw_mem: Box<[u8; MEM_SIZE]>,
 
     pub rom_loaded: Vec<u8>,
-
-    //rom_header: Option<&CartridgeHeader>,
 
     pub timer: Box<Timer>,
     pub gpu: Box<Gpu>,
@@ -63,7 +60,7 @@ impl Memory {
         let mut mem = Memory {
             if_: 0u8,
             ie_: 0u8,
-            raw_mem: [0u8; MEM_SIZE],
+            raw_mem: Box::new([0u8; MEM_SIZE]),
             rom_loaded: Vec::new(),
 
             //rom_header: None,
@@ -72,6 +69,7 @@ impl Memory {
             mbc: Mbc::Unknown,
         };
         mem.power_on();
+
         mem
     }
 
@@ -94,38 +92,38 @@ impl Memory {
 
     pub fn power_on(&mut self) {
         // From http://problemkaputt.de/pandocs.htm#powerupsequence
-        self.write_byte_raw(0xff05, 0x00); // TIMA
-        self.write_byte_raw(0xff06, 0x00); // TMA
-        self.write_byte_raw(0xff07, 0x00); // TAC
-        self.write_byte_raw(0xff10, 0x80); // NR10
-        self.write_byte_raw(0xff11, 0xbf); // NR11
-        self.write_byte_raw(0xff12, 0xf3); // NR12
-        self.write_byte_raw(0xff14, 0xbf); // NR14
-        self.write_byte_raw(0xff16, 0x3f); // NR21
-        self.write_byte_raw(0xff17, 0x00); // NR22
-        self.write_byte_raw(0xff19, 0xbf); // NR24
-        self.write_byte_raw(0xff1a, 0x7f); // NR30
-        self.write_byte_raw(0xff1b, 0xff); // NR31
-        self.write_byte_raw(0xff1c, 0x9F); // NR32
-        self.write_byte_raw(0xff1e, 0xbf); // NR33
-        self.write_byte_raw(0xff20, 0xff); // NR41
-        self.write_byte_raw(0xff21, 0x00); // NR42
-        self.write_byte_raw(0xff22, 0x00); // NR43
-        self.write_byte_raw(0xff23, 0xbf); // NR30
-        self.write_byte_raw(0xff24, 0x77); // NR50
-        self.write_byte_raw(0xff25, 0xf3); // NR51
-        self.write_byte_raw(0xff26, 0xf1); // NR52
-        self.write_byte_raw(0xff40, 0xb1); // LCDC, tweaked to turn the window on
-        self.write_byte_raw(0xff42, 0x00); // SCY
-        self.write_byte_raw(0xff43, 0x00); // SCX
-        self.write_byte_raw(0xff44, 0x00); // LY
-        self.write_byte_raw(0xff45, 0x00); // LYC
-        self.write_byte_raw(0xff47, 0xfc); // BGP
-        self.write_byte_raw(0xff48, 0xff); // OBP0
-        self.write_byte_raw(0xff49, 0xff); // OBP1
-        self.write_byte_raw(0xff4a, 0x00); // WY
-        self.write_byte_raw(0xff4b, 0x07); // WX, tweaked to position the window at (0, 0)
-        self.write_byte_raw(0xffff, 0x00); // IE
+        self.wb(0xff05, 0x00); // TIMA
+        self.wb(0xff06, 0x00); // TMA
+        self.wb(0xff07, 0x00); // TAC
+        self.wb(0xff10, 0x80); // NR10
+        self.wb(0xff11, 0xbf); // NR11
+        self.wb(0xff12, 0xf3); // NR12
+        self.wb(0xff14, 0xbf); // NR14
+        self.wb(0xff16, 0x3f); // NR21
+        self.wb(0xff17, 0x00); // NR22
+        self.wb(0xff19, 0xbf); // NR24
+        self.wb(0xff1a, 0x7f); // NR30
+        self.wb(0xff1b, 0xff); // NR31
+        self.wb(0xff1c, 0x9F); // NR32
+        self.wb(0xff1e, 0xbf); // NR33
+        self.wb(0xff20, 0xff); // NR41
+        self.wb(0xff21, 0x00); // NR42
+        self.wb(0xff22, 0x00); // NR43
+        self.wb(0xff23, 0xbf); // NR30
+        self.wb(0xff24, 0x77); // NR50
+        self.wb(0xff25, 0xf3); // NR51
+        self.wb(0xff26, 0xf1); // NR52
+        self.wb(0xff40, 0xb1); // LCDC, tweaked to turn the window on
+        self.wb(0xff42, 0x00); // SCY
+        self.wb(0xff43, 0x00); // SCX
+        //self.wb(0xff44, 0x00); // LY
+        //self.wb(0xff45, 0x00); // LYC
+        self.wb(0xff47, 0x1b); // BGP   // 1b for entire palette
+        self.wb(0xff48, 0xff); // OBP0
+        self.wb(0xff49, 0xff); // OBP1
+        self.wb(0xff4a, 0x00); // WY
+        self.wb(0xff4b, 0x07); // WX, tweaked to position the window at (0, 0)
+        self.wb(0xffff, 0x00); // IE
 
     }
     pub fn set_rom(&mut self, rom: Vec<u8>) {
@@ -143,7 +141,7 @@ impl Memory {
     // Private members
 
     fn read_byte_raw(&self, addr: u16) -> u8 {
-        let addr: usize = (addr as usize) - START_MAPPED_MEM;
+        let addr = addr as usize;
         assert!(addr <= MEM_SIZE,
          "Invalid memory read: {:04X}", addr);
 
@@ -151,24 +149,24 @@ impl Memory {
     }
     
     fn read_word_raw(&self, addr: u16) -> u16 {
-        let addr: usize = (addr as usize) - START_MAPPED_MEM;
+        let addr = addr as usize;
         assert!(addr <= MEM_SIZE - 1,
-         "Invalid memory read: {:04X}", addr);
+         "Invalid memory read: {:04X}", addr as usize);
 
         (self.raw_mem[addr] as u16) << 8 |
         (self.raw_mem[addr + 1] as u16)
     }
 
     fn write_byte_raw(&mut self, addr: u16, data: u8) {
-        let addr: usize = (addr as usize) - START_MAPPED_MEM;
+        let addr = addr as usize;
         assert!(addr <= MEM_SIZE,
-         "Invalid memory read: {:04X}", addr);
+         "Invalid memory read: {:04X}", addr as usize);
 
         self.raw_mem[addr] = data
     }
 
     fn write_word_raw(&mut self, addr: u16, data: u16) {
-        let addr: usize = (addr as usize) - START_MAPPED_MEM;
+        let addr = addr as usize;
         assert!(addr <= MEM_SIZE - 1,
          "Invalid memory write: {:04X}", addr);
 
@@ -181,20 +179,27 @@ impl Memory {
     // Read Byte
     pub fn rb(&self, addr: u16) -> u8 {
         //self.debug_print_addr(addr, true);
-
         match addr {
-            0x0000 ... 0x3FFF => self.rom_loaded[addr as u16 as usize],
             // TODO: Memory bank switching
             0x4000 ... 0x7FFF => {
-                    self.rom_loaded[addr as u16 as usize]
-                    //panic!("Bank switching unimplemented"); // self.rom_loaded[addr as u16 as usize],
+                    //panic!("Bank switching unimplemented");
+                    self.rom_loaded[addr as usize]
                 },
-            0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000), // Mirrored memory
-            0xFEA0 ... 0xFEFF => panic!("Unusable memory accessed"),
+            // VRAM so let the gpu handle it
+            0x8000 ... 0xBFFF => self.gpu.rb_vram(addr),
+            // Mirrored memory
+            0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000),
+            0xFEA0 ... 0xFEFF => {warn!("Unusable memory accessed"); 0xFF },
             0xFF00 ... 0xFF79 => self.ioreg_rb(addr),
 
             // Timer Registers
             //0xFF04 => self.
+
+            // Interrupt enable
+            0xFFFF => {
+                info!("Interrupt enable read ie: {:08b}", self.ie_);
+                self.ie_
+            },
             _ => self.read_byte_raw(addr),
         }
     }
@@ -211,12 +216,27 @@ impl Memory {
     // Write byte
     pub fn wb(&mut self, addr: u16, data: u8) {
         //self.debug_print_addr(addr, false);
-
         match addr {
-            0xE000 ... 0xFDFF => self.write_byte_raw(addr - 0x2000, data),  // Mirrored memory
-            0xFEA0 ... 0xFEFF => panic!("Unusable memory written to"),
+            0x4000 ... 0x7FFF => {
+                //panic!("Bank switching unimplemented"); // self.rom_loaded[addr as u16 as usize],
+                self.rom_loaded[addr as usize] = data;
+            },
+            // Mirrored memory
+            0xE000 ... 0xFDFF => self.write_byte_raw(addr - 0x2000, data),
+            0xFEA0 ... 0xFEFF => warn!("Unusable memory written to"),
+            // VRAM so let the gpu handle it
+            0x8000 ... 0xBFFF => self.gpu.wb_vram(addr, data),
+            // IO Ports
             0xFF00 ... 0xFF79 => self.ioreg_wb(addr, data),
-            _ => self.write_byte_raw(addr, data),
+            // Interrupt enable
+            0xFFFF => {
+                self.ie_ = data;
+                info!("Interrupt enable write ie: {:08b}", self.ie_);
+            },
+            _ => {
+                //debug!("raw byte write to addr: {:04X}  data: {:02X}", addr, data);
+                self.write_byte_raw(addr, data);
+            },
         }
     }
 
@@ -231,14 +251,15 @@ impl Memory {
 
     /// Reads a value from a known IO type register
     fn ioreg_rb(&self, addr: u16) -> u8 {
-        debug!("ioreg_rb {:x}", addr);
+        //debug!("ioreg_rb {:x}", addr);
         match (addr >> 4) & 0xF {
             // I/O Ports (0xFF0x)
             0x0 => {
                 match addr & 0xF {
                     // TODO: Input
                     //0x0 => self.input.rb(addr),
-                    0x0 => {warn!("Input requested (unimplemented) in address {:04X}", addr); 0},
+                    0x0 => {
+                        warn!("Input requested (unimplemented) in address {:04X}", addr); 0},
                     0x4 => self.timer.div,
                     0x5 => self.timer.tima,
                     0x6 => self.timer.tma,
@@ -252,7 +273,7 @@ impl Memory {
             0x4 => {
                 match addr & 0xF {
                     0...5 | 7...0xB | 0xF => {
-                        debug!("gpu_rb {:x}", addr);
+                        //debug!("gpu_rb {:x}", addr);
                         self.gpu.rb(addr)
                     },
                     _ => self.read_byte_raw(addr),
@@ -294,7 +315,7 @@ impl Memory {
                     }
                     0xf => { self.if_ = data; }
                     _ => {
-                        warn!("Unhandled ioreg_wb address");
+                        warn!("Unhandled ioreg_wb address {:04X} written to. data: {:02X}", addr, data);
                         self.write_byte_raw(addr, data);
                     }
                 }
@@ -304,7 +325,7 @@ impl Memory {
                 match addr & 0xF {
                     0...3 | 5 | 7...0xB => {
                         let dt = self.gpu.wb(addr, data);
-                        debug!("gpu_wb {:x} {:x}", addr, data);
+                        //debug!("gpu_wb {:x} {:x}", addr, data);
                         dt
                     },
                     4 => warn!("LY read request, but it is read-only"),
@@ -313,7 +334,6 @@ impl Memory {
                 }
             }
             _ => {
-                warn!("Unhandled ioreg_wb address: {:04X}", addr);
                 self.write_byte_raw(addr, data);
             }
         }
