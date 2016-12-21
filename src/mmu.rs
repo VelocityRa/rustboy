@@ -5,10 +5,7 @@
 /*
   0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
   4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
-  ________________________________________________________________________
-              we map the above banks to the loaded rom
-              and raw_mem stores the memory below
-  ________________________________________________________________________
+
   8000-9FFF   8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
   A000-BFFF   8KB External RAM     (in cartridge, switchable bank, if any)
   C000-CFFF   4KB Work RAM Bank 0 (WRAM)
@@ -64,6 +61,23 @@ impl Memory {
         };
         mem.power_on();
         mem
+    }
+
+    // Copies VRAM from rom to the gpu's vrambanks
+    pub fn copy_vram(&mut self) {
+        // TODO: Make faster?
+        const VRAM_START: u16 = 0x8000;
+        const VRAM_EXT_START: u16 = 0xA000;
+        const VRAM_SIZE: u16 = 8 << 10; // 8K;
+        for addr in 0..VRAM_SIZE {
+            self.gpu.vrambanks[0][addr as usize] = self.rom_loaded[(addr + VRAM_START) as usize];
+            self.gpu.vrambanks[1][addr as usize] = self.rom_loaded[(addr + VRAM_EXT_START) as usize];
+        }
+    }
+
+    pub fn copy_rom(&mut self) {
+        // Copy ROM data to memory
+        self.raw_mem[0x0000..0x4000].copy_from_slice(&self.rom_loaded[0x0000..0x4000]);
     }
 
     pub fn power_on(&mut self) {

@@ -36,7 +36,7 @@ pub struct CartridgeHeader {
     pub cartridge_type: u8,
 
     // Typically calculated as "32KB << N"
-    rom_size: u8,
+    pub rom_size: u8,
 
     // Specifies the size of the external RAM in the cartridge (if any).
     // 00h - None

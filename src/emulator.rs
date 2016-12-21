@@ -4,7 +4,7 @@ use gfx_device_gl::Resources as R;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io;
+use std::{io, fmt};
 use std::path::Path;
 use piston::window::Window;
 
@@ -41,6 +41,13 @@ impl Emulator {
         // Read rom and move ownership to memory component
         emu.mem.set_rom(try_open_rom(&rom_path));
 
+        // If the rom is more than 32KB, it has VRAM so we need to copy it
+        if emu.rom_header.rom_size > 0 {
+            emu.mem.copy_vram();
+        }
+        emu.mem.copy_rom();
+
+        emu.mem.find_mbc(emu.rom_header.cartridge_type);
         // Give immutable reference of rom header to memory component
         //emu.mem.borrow_rom_header(&emu.rom_header);
 
@@ -67,9 +74,10 @@ impl Emulator {
             temp_total_cycles += cycles;
 
             if self.cpu.get_regs().stop {self.cpu.stop(); return; }
-            if self.cpu.is_stepping { break; }
+            if self.is_instr_stepping { self.set_running(false) }; // kinda broken
         }
-        
+        self.frame_count += 1;
+        if self.is_frame_stepping { self.set_running(false) };
         // Update gpu image data
         self.mem.gpu.update();
     }
@@ -101,6 +109,18 @@ impl Emulator {
         self.is_debugging = !self.is_debugging;
     }
     
+}
+
+impl fmt::Debug for Emulator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+" State: {}
+ Frame: {}   Cycles: {}",
+            if self.cpu.is_running {"Running"} else {"Paused"},
+            self.frame_count,
+            self.cpu.total_cycles,
+        )
+    }
 }
 
 fn open_rom<P: AsRef<Path>>(rom_path: P) -> io::Result< Vec<u8> > {

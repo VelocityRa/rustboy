@@ -13,7 +13,8 @@ use mmu::Memory;
 use timer::Timer;
 
 // CPU Clock speed
-pub const CLOCK_SPEED: f64 = 4.194304; // MHz
+// TODO: Disable if log level > TRACE
+pub const INSTR_DEBUG: bool = false;    // very laggy
 
 #[allow(dead_code)]
 pub enum Interrupt {
@@ -106,16 +107,14 @@ impl Registers {
 
     // Instructions
 
-    fn hlpp(&mut self) {
-        self.l.wrapping_add(1);
+    fn inc_hl(&mut self) {
         self.l = self.l.wrapping_add(1);
         if self.l == 0 {
             self.h = self.h.wrapping_add(1);
         }
     }
 
-    fn hlmm(&mut self) {
-        self.l.wrapping_sub(1);
+    fn dec_hl(&mut self) {
         self.l = self.l.wrapping_sub(1);
         if self.l == 0xff {
             self.h = self.h.wrapping_sub(1);
@@ -124,8 +123,8 @@ impl Registers {
 
     fn ret(&mut self, m: &Memory) {
         self.pc = m.rw(self.sp);
-        self.sp += 2;
         debug!("RET to {:04X}", self.pc);
+        self.sp += 2;
     }
 
     fn inc_hlm(&mut self, m: &mut Memory) {
@@ -187,18 +186,11 @@ impl fmt::Display for Flag {
 
 // Set everything to zero/false
 #[derive(Default)]
-// Pack the bools like a bitfield
-#[repr(C, packed)]
 pub struct Flags {
     z: Flag,        // Zero Flag
     n: Flag,        // Add/Sub-Flag (BCD)
     h: Flag,        // Half Carry Flag (BCD)
     c: Flag,        // Carry Flag
-
-    unused1: bool,  // Unused (always 0)
-    unused2: bool,  // Unused (always 0)
-    unused3: bool,  // Unused (always 0)
-    unused4: bool,  // Unused (always 0)
 }
 
 impl Flags {
@@ -209,6 +201,14 @@ impl Flags {
         self.c.unset();
     }
 }
+
+// Converts a flat to either its symbol (like 'z' or 'c'),
+// or the character '-'. Used for debugging in exec().
+macro_rules! flag_to_ch (
+    ($sel:ident, $fl:ident, $ch:expr) => ({
+        if $sel.regs.f.$fl.value {$ch} else {'-'}
+    })
+);
 
 // Interrupt handlers
 macro_rules! rst (
