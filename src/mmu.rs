@@ -251,12 +251,28 @@ impl Memory {
     }
 
     fn ioreg_wb(&mut self, addr: u16, data: u8) {
-        debug!("ioreg_wb {:x} {:x}", addr, data);
+        use std::str;
+        use std::io::prelude::*;
+        use std::fs::OpenOptions;
+
+        //debug!("ioreg_wb {:x} {:x}", addr, data);
         match (addr >> 4) & 0xF {
+
             // I/O Ports (0xFF0x)
             0x0 => {
                 match addr & 0xF {
-                    0x0 => { debug!("Serial data transfer (unimplemented) in address {:04X}, data {:02X}", addr, data)}
+                    0x1 => {
+                        info!("Serial data transfer in address {:04X}, data {}", addr, data as char);
+
+                        // Open a file in write-only mode, returns `io::Result<File>`
+                        let mut file = OpenOptions::new()
+                            .append(true)
+                            .create(true)
+                            .open("serial_out.txt")
+                            .unwrap();
+
+                        file.write(&[data]).unwrap();
+                    }
                     0x4 => { self.timer.div = 0; }
                     0x5 => { self.timer.tima = data; }
                     0x6 => { self.timer.tma = data; }
