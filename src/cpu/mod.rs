@@ -7,6 +7,7 @@
 pub mod instructions;
 
 use std::fmt;
+use colored::*;
 
 use mmu::Memory;
 use timer::Timer;
@@ -273,7 +274,7 @@ impl Cpu {
     }
 
     pub fn update_timers(&mut self, mem: &mut Memory) {
-        /*
+    /*
         // This register is incremented at rate of 16384Hz
         self.timers.div_reg = 
             self.timers.div_reg.wrapping_add(
@@ -291,16 +292,17 @@ impl Cpu {
             // Read value from TMA - Timer Modulo
             self.timers.counter = mem.read_byte(0xFF06); 
         }
-*/
         //println!("d:{:02X} \t c:{:02X}",  self.timers.div_reg, self.timers.counter);  Memory-map the timers
 
 
         // TODO: Handle in memory mapping instead
         //mem.write_byte(0xFF04, self.timers.div_reg);
         //mem.write_byte(0xFF05, self.timers.counter);
+    */
     }
 
     // Dispatcher
+    // Exectutes 1 instruction
     pub fn exec(&mut self, mem: &mut Memory) -> u32 {
 
         // Interrupt step
@@ -308,30 +310,53 @@ impl Cpu {
 
         // Fetch opcode
         let op: u8 = mem.rb(self.regs.pc);
-    
-        //debug!("PC:{:04X}, OP:{:02X}", self.regs.pc, op);
+
         let pc_before = self.regs.pc;
 
         // Increment PC
         self.regs.pc += 1;
         
         // Execute instruction
-        let cycles = instructions::exec(op, &mut self.regs, mem);
+        let cycles = instructions::exec(op, &mut self.regs, mem) * 4;
 
-        //println!("{} {}", self.regs.pc, pc_before);
+        if INSTR_DEBUG && op != 0x00 {
+            let pc_diff = self.regs.pc as i32 - pc_before as i32;
 
-        if op != 0x00 {
-            match self.regs.pc as i32 - pc_before as i32 {
-                1 => println!("[0x{:08X}] 0x{:02X}", pc_before, op),
-                2 => println!("[0x{:08X}] 0x{:02X} 0x{:02X}",
-                    pc_before, op, mem.rb(pc_before + 1)),
-                3 => println!("[0x{:08X}] 0x{:02X} 0x{:02X} 0x{:02X}",
-                    pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
-                _ => {}//println!("Call or jump from 0x{:04X} to 0x{:04X}", pc_before, self.regs.pc),
-            };
+            let addr_and_instr =
+                match pc_diff {
+                    1 => format!("[0x{:04X}] 0x{:02X}          ",
+                        pc_before, op),
+                    2 => format!("[0x{:04X}] 0x{:02X} 0x{:02X}     ",
+                        pc_before, op, mem.rb(pc_before + 1)),
+                    3 => format!("[0x{:04X}] 0x{:02X} 0x{:02X} 0x{:02X}",
+                        pc_before, op, mem.rb(pc_before + 1), mem.rb(pc_before + 2)),
+                    _ => format!("[0x{:04X}] 0x{:02X} (JUMP)   ",
+                        pc_before, op),
+                           //print!("Jump offset: {}", self.regs.pc as i32
+                           //                        - pc_before as i32,
+
+                };
+            macro_rules! y (
+                ($v:expr) => ($v.yellow())
+            );
+            macro_rules! o (
+                ($v:expr) => ($v.red())
+            );
+
+            let regs_and_flags = format!("\t\t{} {:02X}   {} {:02X} {:02X}   {} {:02X} {:02X}   {} {:02X} {:02X}   {} {:04X}   {} {}{}{}{}",
+                y!("A:"), self.regs.a,
+                y!("BC:"), self.regs.b, self.regs.c,
+                y!("DE:"), self.regs.d, self.regs.e,
+                y!("HL:"), self.regs.h ,self.regs.l,
+                y!("SP:"), self.regs.sp,
+                o!("FLAGS: "),
+                flag_to_ch!(self, z,'z'), flag_to_ch!(self, n,'n'),
+                flag_to_ch!(self, h,'h'), flag_to_ch!(self, c,'c'));
+            trace!("{}{}", addr_and_instr, regs_and_flags);
         };
-        
-        self.total_cycles += cycles * 4;
+
+        self.total_cycles += cycles;
+
         // Interrupt handling
         if self.regs.ime && (mem.ie_ & mem.if_ != 0) {
             let interrupts = mem.ie_ & mem.if_;
@@ -371,17 +396,6 @@ impl Cpu {
         //debug!("Cycles: {}", self.total_cycles);
 
         return cycles;
-    }
-}
-
-impl fmt::Debug for Cpu {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, 
-" State: {}
- Cycles: {}",
-            if self.is_running {"Running"} else {"Paused"},
-            self.total_cycles,
-            )
     }
 }
 
