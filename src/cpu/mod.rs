@@ -29,7 +29,7 @@ pub enum Interrupt {
 // Z80 registers
 #[derive(Default)]
 pub struct Registers  {
-    pub ime: u32,
+    pub ime: bool,
     halt: bool,
     pub stop: bool,
 
@@ -41,19 +41,21 @@ pub struct Registers  {
     h: u8,
     l: u8,      // HL: General purpose
 
-    f: Flags,       // Flags
+    f: Flags,   // Flags
 
-    sp: u16,            // SP: Stack pointer
-    pc: u16,            // PC: Program counter
+    sp: u16,    // SP: Stack pointer
+    pc: u16,    // PC: Program counter
 
     delay: u32
 }
 
 
 impl Registers {
-    pub fn af(&self) -> u16 { (self.a as u16) << 8 | 
-        ((self.f.z.value as u16) << 7) | (self.f.n.value as u16) << 6
-        | (self.f.h.value as u16) << 5 | (self.f.c.value as u16) << 4 }
+    fn f(&self) -> u8 {
+        ((self.f.z.value as u8) << 7) | (self.f.n.value as u8) << 6
+        |(self.f.h.value as u8) << 5 | (self.f.c.value as u8) << 4
+    }
+    pub fn af(&self) -> u16 { (self.a as u16) << 8 | self.f() as u16 }
     pub fn bc(&self) -> u16 { (self.b as u16) << 8 | self.c as u16 }
     pub fn de(&self) -> u16 { (self.d as u16) << 8 | self.e as u16 }
     pub fn hl(&self) -> u16 { (self.h as u16) << 8 | self.l as u16 }
@@ -65,6 +67,8 @@ impl Registers {
     pub fn de_set(&mut self, new: u16){ self.d = (new >> 8) as u8; self.e = new as u8; }
     pub fn hl_set(&mut self, new: u16){ self.h = (new >> 8) as u8; self.l = new as u8; }
 
+    pub fn pc(&self) -> u16 { self.pc }
+
     #[inline]
     pub fn bump(&mut self) -> u16 {
         let ret = self.pc;
@@ -73,10 +77,10 @@ impl Registers {
         return ret;
     }
 
-    // Interrupts
+    // Update IME (for interrupts)
     pub fn int_step(&mut self) {
         match self.delay {
-            1 => { self.delay = 0; self.ime = 1; }
+            1 => { self.delay = 0; self.ime = true; }
             2 => { self.delay = 1; }
             _ => return
         }
@@ -85,7 +89,7 @@ impl Registers {
 
     // Schedule enabling of interrupts
     pub fn ei(&mut self, m: &mut Memory) {
-        if self.delay == 2 || m.rb(self.pc) == 0x76 {
+        if self.delay == 2 || m.rb(self.pc) == 0x76 {   // 0x76 == HALT
             self.delay = 1;
         } else {
             self.delay = 2;
@@ -95,7 +99,7 @@ impl Registers {
 
     pub fn di(&mut self) {
         info!("Disable interrupts");
-        self.ime = 0;
+        self.ime = false;
         self.delay = 0;
     }
 
@@ -204,6 +208,16 @@ impl Flags {
         self.c.unset();
     }
 }
+
+// Interrupt handlers
+macro_rules! rst (
+($sel:ident, $mem:ident, $isr:expr) => ({
+    $sel.regs.ime = false;
+    $sel.regs.sp -= 2;
+    $mem.ww($sel.regs.sp, $sel.regs.pc);
+    $sel.regs.pc = $isr;
+    $sel.total_cycles += 12;
+}) );
 
 pub struct Cpu {
     regs: Registers,
@@ -318,6 +332,41 @@ impl Cpu {
         };
         
         self.total_cycles += cycles * 4;
+        // Interrupt handling
+        if self.regs.ime && (mem.ie_ & mem.if_ != 0) {
+            let interrupts = mem.ie_ & mem.if_;
+
+            // Vertical blank (ISR: 40 )
+            if interrupts & 0b1 != 0 {
+                rst!(self, mem, 0x40);
+                mem.if_ &= 0xFF - 0b1;
+                warn!("{}","VBLANK".magenta());
+            }
+            // LCD status triggers (ISR: 48 )
+            if interrupts & 0b10 != 0 {
+                rst!(self, mem, 0x48);
+                mem.if_ &= 0xFF - 0b10;
+                warn!("{}","LCD status triggers".magenta());
+            }
+            // Timer overflow (ISR: 50 )
+            if interrupts & 0b100 != 0 {
+                rst!(self, mem, 0x50);
+                mem.if_ &= 0xFF - 0b100;
+                warn!("{}","Timer overflow".magenta());
+            }
+            // Serial link (ISR: 58 )
+            if interrupts & 0b1000 != 0 {
+                rst!(self, mem, 0x58);
+                mem.if_ &= 0xFF - 0b1000;
+                warn!("{}","Serial link".magenta());
+            }
+            // LCD status triggers (ISR: 60 )
+            if interrupts & 0b10000 != 0 {
+                rst!(self, mem, 0x60);
+                mem.if_ &= 0xFF - 0b10000;
+                warn!("{}","Joypad press".magenta());
+            }
+        }
 
         //debug!("Cycles: {}", self.total_cycles);
 
