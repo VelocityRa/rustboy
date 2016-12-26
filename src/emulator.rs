@@ -88,11 +88,6 @@ impl Emulator {
     pub fn get_header(&self) -> &CartridgeHeader {
         &self.rom_header
     }
-/*
-    pub fn update_cpu_timers(&mut self, dt: f64) {
-        self.cpu.update_timers(&mut self.mem);
-    }
-*/
     pub fn is_debugging(&self) -> bool {
         self.is_debugging
     }

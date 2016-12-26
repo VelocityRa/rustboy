@@ -3,8 +3,6 @@
 //
 #[allow(dead_code)] 
 
-use rand;
-
 use cpu::Interrupt;
 
 use piston::input;

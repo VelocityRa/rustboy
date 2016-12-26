@@ -8,9 +8,7 @@ pub mod instructions;
 
 use std::fmt;
 use colored::*;
-
 use mmu::Memory;
-use timer::Timer;
 
 // CPU Clock speed
 // TODO: Disable if log level > TRACE
@@ -222,7 +220,7 @@ macro_rules! rst (
 
 pub struct Cpu {
     regs: Registers,
-    timer: Timer,
+
     pub total_cycles: u32,
     pub is_running: bool,
 }
@@ -231,7 +229,6 @@ impl Cpu {
     pub fn new() -> Cpu {
         let mut cpu: Cpu = Cpu {
             regs: Default::default(),
-            timer: Timer::new(),
             total_cycles: 0,
             is_running: false,
         };
@@ -265,36 +262,8 @@ impl Cpu {
         &mut self.regs.f
     }
 
-    pub fn update_timers(&mut self, mem: &mut Memory) {
-    /*
-        // This register is incremented at rate of 16384Hz
-        self.timers.div_reg = 
-            self.timers.div_reg.wrapping_add(
-                ((dt * 16384.0) as u64 % 256) as u8
-            );
-
-        // TODO: Load correct incrementation rate
-        let (new_counter, counter_overflowed) = 
-            self.timers.counter.overflowing_add(
-                ((dt * 16384.0) as u64 % 256) as u8
-            );
-
-        self.timers.counter = new_counter;
-        if counter_overflowed {
-            // Read value from TMA - Timer Modulo
-            self.timers.counter = mem.read_byte(0xFF06); 
-        }
-        //println!("d:{:02X} \t c:{:02X}",  self.timers.div_reg, self.timers.counter);  Memory-map the timers
-
-
-        // TODO: Handle in memory mapping instead
-        //mem.write_byte(0xFF04, self.timers.div_reg);
-        //mem.write_byte(0xFF05, self.timers.counter);
-    */
-    }
-
     // Dispatcher
-    // Exectutes 1 instruction
+    // Executes 1 instruction
     pub fn exec(&mut self, mem: &mut Memory) -> u32 {
 
         // Interrupt step
