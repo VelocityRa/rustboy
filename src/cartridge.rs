@@ -130,8 +130,7 @@ pub fn read_header_impl(emu: &Emulator) -> CartridgeHeader {
         // `read_exact()` comes from `Read` impl for `&[u8]`
         buffer_slice.read_exact(header_slice).unwrap();
     }
-
-    println!("Read header: {:#?}", header);
+    info!("Read header: {:#?}", header);
     header
 }
 

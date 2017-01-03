@@ -18,7 +18,7 @@ pub struct Timer {
     // Writing any value to this register resets it to 00h
     pub div: u8,
         // This timer is incremented by a clock frequency specified by the TAC register ($FF07)
-    // When the value overflows (gets bigger than FFh) then it will be reset to the 
+    // When the value overflows (gets bigger than FFh) then it will be reset to the
     // value specified in TMA (FF06), and an interrupt will be requested
     pub tima: u8,
 

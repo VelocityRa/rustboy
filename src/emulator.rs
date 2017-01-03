@@ -12,7 +12,7 @@ use cpu::Cpu;
 use mmu::Memory;
 use cartridge::*;
 
-// Clock cycles between every screen refresh 
+// Clock cycles between every screen refresh
 pub const SCREEN_REFRESH_INTERVAL: u32 = 70224; // clock cycles
 
 pub struct Emulator {
@@ -141,7 +141,7 @@ pub fn try_open_rom<P: AsRef<Path>>(rom_path: P) -> Vec<u8> {
 
     // Call open_rom and handle Result
     match open_rom(&rom_path) {
-        Err(why) => 
+        Err(why) =>
             panic!("Couldn't open rom {}: {}", rom_display,
                 why.description()),
         Ok(data) => {

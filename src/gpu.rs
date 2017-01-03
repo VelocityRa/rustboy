@@ -1,7 +1,7 @@
 //
 //      Graphics Processing Unit
 //
-#[allow(dead_code)] 
+#[allow(dead_code)]
 
 use cpu::Interrupt;
 
@@ -425,7 +425,6 @@ impl Gpu {
         let mut scanline = [0u8; WIDTH];
 
         if self.tiles.need_update {
-            info!("Updating tileset...");
             self.update_tileset();
             self.tiles.need_update = false;
         }
@@ -509,9 +508,9 @@ impl Gpu {
 
                 let first_byte = coff; // 4 * (x + (y * 160)) as usize;
 
-                self.image_data[first_byte] = color[0];      // R
-                self.image_data[first_byte+1] = color[1];    // G
-                self.image_data[first_byte+2] = color[2];    // B
+                self.image_data[first_byte] = color[0];    // R
+                self.image_data[first_byte+1] = color[1];  // G
+                self.image_data[first_byte+2] = color[2];  // B
                 self.image_data[first_byte+3] = color[3];  // A
 
                 x += 1;

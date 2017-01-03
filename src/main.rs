@@ -50,7 +50,7 @@ const TEXT_COLOR: [f32; 4] = [255./255., 255./255., 255./255., 1.0];
 const TEXT_TITLE_COLOR: [f32; 4] = [210./255., 210./255., 210./255., 1.0];
 
 const NATIVE_DIMS: [u32; 2] = [160, 144];
-const SCREEN_DIMS: [u32; 2] = [NATIVE_DIMS[0] * SCREEN_MULT, 
+const SCREEN_DIMS: [u32; 2] = [NATIVE_DIMS[0] * SCREEN_MULT,
                                NATIVE_DIMS[1] * SCREEN_MULT];
 const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
 
@@ -91,7 +91,7 @@ fn main() {
     }
 
     // Window creation
-    let mut window: PistonWindow<GlfwWindow> = 
+    let mut window: PistonWindow<GlfwWindow> =
         WindowSettings::new(
             WINDOW_TITLE,
             SCREEN_DIMS,
@@ -162,7 +162,7 @@ fn main() {
             window.draw_2d(&evt, |c, g| {
                 use graphics::Transformed;
 
-                emu.mem.gpu.img.draw(&framebuffer, &c.draw_state, 
+                emu.mem.gpu.img.draw(&framebuffer, &c.draw_state,
                     c.transform.scale(SCREEN_MULT as f64, SCREEN_MULT as f64), g);
             });
 

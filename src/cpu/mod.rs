@@ -395,7 +395,7 @@ impl Cpu {
 
 impl fmt::Debug for Registers {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, 
+        write!(f,
 " PC: {:04X}  SP: {:04X}
  A: {:02X}
  B: {:02X}  BC: {:04X}
@@ -418,7 +418,7 @@ impl fmt::Debug for Registers {
 
 impl fmt::Debug for Flags {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, 
+        write!(f,
 " Z: {}
  N: {}
  H: {}
@@ -468,7 +468,7 @@ mod cpu_tests {
         flags.n.unset();
         flags.h.set();
         flags.c.unset();
-        
+
         assert_eq!(flags.z.get(),   true);
         assert_eq!(flags.n.get(),   false);
         assert_eq!(flags.h.get(),   true);

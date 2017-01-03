@@ -13,7 +13,7 @@ impl Cpu {
 //  |          CPU INSTRUCTIONS          |
 //  ======================================
 
-pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {  
+pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     macro_rules! ld (
         ($reg1:ident, $reg2:ident) => ({ r.$reg1 = r.$reg2;
         1 }) );
@@ -52,7 +52,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         4 }) );
 
     macro_rules! jp_n (
-        ($should_jp:expr) => (if $should_jp {jp!()} else {r.pc += 2; 
+        ($should_jp:expr) => (if $should_jp {jp!()} else {r.pc += 2;
         3 }) );
 
     macro_rules! jr (
@@ -76,7 +76,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
             if r.$reg & 0xF == 0 {r.f.h.set()};
         1 }) );
 
-    macro_rules! inc_16( 
+    macro_rules! inc_16(
         ($reg1:ident, $reg2: ident) => ({
             r.$reg2 = r.$reg2.wrapping_add(1);
             if r.$reg2 == 0 { r.$reg1 = r.$reg1.wrapping_add(1); }
@@ -288,7 +288,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     }) );
 
     // macro_rules! rl (
-    
+
     //  )
 
 
@@ -296,13 +296,13 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     //  info!("Decoding {:02X}", inst);
     // }
 
-    // Table is partially from 
+    // Table is partially from
     // https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L279-L549
     // Instruction macros implemented by me
     match inst {
         0x00 => 1,                                                  // nop
         0x01 => ld_nn!(b, c),                                       // ld_bcnn
-        
+
         0x02 => { m.wb(r.bc(), r.a); 2 }                            // ld_bca
         0x03 => inc_16!(b, c),                                      // inc_bc
         0x04 => inc!(b),                                            // inc_b
@@ -600,7 +600,7 @@ fn add_spn(r: &mut Registers, m: &mut mmu::Memory) {
 //  ======================================
 //  |           CB INSTRUCTIONS          |
 //  ======================================
- 
+
 
 // From https://github.com/alexcrichton/jba/blob/rust/src/cpu/z80/imp.rs#L555-L896
 #[allow(unused_parens)]
