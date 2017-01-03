@@ -30,7 +30,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! call (
         () => ({
-            r.sp -= 2;
+            r.sp = r.sp.wrapping_sub(2);
             m.ww(r.sp, r.pc + 2);
             let target = m.rw(r.pc);
             debug!("CALL to {:04X}", target);
@@ -71,7 +71,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
             r.$reg = r.$reg.wrapping_add(1);
             r.f.h.unset();
             r.f.z.unset();
-            r.f.n.set();
+            r.f.n.unset();
             if r.$reg == 0 {r.f.z.set()};
             if r.$reg & 0xF == 0 {r.f.h.set()};
         1 }) );
@@ -100,8 +100,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! rst (
     ($e:expr) => ({
-        r.sp -= 2;
-        m.ww(r.sp, r.pc + 1);
+        r.sp = r.sp.wrapping_sub(2);
+        m.ww(r.sp, r.pc);
         r.pc = $e;
     4 }) );
 
@@ -161,7 +161,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.h.unset();
         r.f.z.unset();
         r.$reg.rotate_left($n);
-        if r.$reg & 0x1 == 1 {r.f.c.set()} else {r.f.c.unset()}
+        r.f.c.set_if(r.$reg & 0x1 == 1);
     4 }) );
 
     macro_rules! rrc (
@@ -170,7 +170,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.h.unset();
         r.f.z.unset();
         r.$reg.rotate_right($n);
-        if r.$reg & 0x80 == 1 {r.f.c.set()} else {r.f.c.unset()}
+        r.f.c.set_if(r.$reg & 0x80 == 1);
     4 }) );
 
     macro_rules! add_hl(
@@ -187,7 +187,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! push (
     ($reg:ident) => ({
-        r.sp -= 2;
+        r.sp = r.sp.wrapping_sub(2);
         m.ww(r.sp, r.$reg());
     4 }) );
 
@@ -229,7 +229,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let a = r.a;
         let b = $reg;
         let c = if r.f.c.get() {1} else {0};
-        r.f.c.set_if(a < b + c);
+        r.f.c.set_if(a < b.wrapping_add(c));
         r.f.h.set_if((a & 0xF) < (b & 0xF) + c);
         r.a = (a.wrapping_sub(b).wrapping_sub(c)) as u8;
         r.f.z.set_if(r.a == 0);
@@ -246,6 +246,11 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         if tmp & 0x010 != 0 {r.f.h.set()};
     3 }) );
 
+    macro_rules! ld_aIOn (
+    () => ({
+        let b = m.rb(r.bump()) as u16;
+        r.a = m.rb(0xff00 | b);
+    3 }) );
     // TODO: use set_or_else for everything
 
     macro_rules! daa (
@@ -552,7 +557,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xee => { xor_a!(m.rb(r.bump())); 2 }                       // xor_an
         0xef => rst!(0x28),                                         // rst_28
 
-        0xf0 => { r.a = m.rb(0xff00 | (m.rb(r.bump()) as u16)); 3 } // ld_aIOn
+        0xf0 => ld_aIOn!(),                                         // ld_aIOn
         0xf1 => { let sp=r.sp; r.af_set(m.rw(sp)); r.sp += 2; 3 },  // pop_af
         0xf2 => { r.a = m.rb(0xff00 | (r.c as u16)); 2 }            // ld_aIOc
         0xf3 => { r.di(); 1 }                                       // di
@@ -562,7 +567,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xf7 => rst!(0x30),                                         // rst_30
         0xf8 => { ld_hlspn!() }                                     // ld_hlspn
         0xf9 => { r.sp = r.hl(); 2 }                                // ld_sphl
-        0xfa => { r.a = m.rb(m.rw(r.pc)); r.pc += 2; 4 }            // ld_ann
+        0xfa => { let b = m.rw(r.pc); r.a = m.rb(b); r.pc += 2; 4 } // ld_ann
         0xfb => { r.ei(m); 1 }                                      // ei
         0xfc => xx(),                                               // xx
         0xfd => xx(),                                               // xx
