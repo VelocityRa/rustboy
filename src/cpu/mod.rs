@@ -6,13 +6,19 @@
 
 pub mod instructions;
 
+use std::str;
 use std::fmt;
+use std::io::prelude::*;
+use std::fs::{OpenOptions, File};
+
 use colored::*;
 use mmu::Memory;
+
 
 // CPU Clock speed
 // TODO: Disable if log level > TRACE
 pub const INSTR_DEBUG: bool = false;    // very laggy
+pub const WADATSUMI_DEBUG: bool = true;    // Format debug text the same way Wadatsume does (for easy comparison)
 
 #[allow(dead_code)]
 pub enum Interrupt {
@@ -119,7 +125,7 @@ impl Registers {
         }
     }
 
-    fn ret(&mut self, m: &Memory) {
+    fn ret(&mut self, m: &mut Memory) {
         self.pc = m.rw(self.sp);
         debug!("RET to {:04X}", self.pc);
         self.sp += 2;
@@ -128,7 +134,7 @@ impl Registers {
     fn inc_hlm(&mut self, m: &mut Memory) {
         self.f.n.unset();
         let hl = self.hl();
-        let v = m.rb(hl) + 1;
+        let v = m.rb(hl).wrapping_add(1);
         m.wb(hl, v);
         if v == 0 {self.f.z.set()} else {self.f.z.unset()};
         if v & 0xF == 0 {self.f.h.set()} else {self.f.h.unset()};
@@ -223,6 +229,7 @@ pub struct Cpu {
 
     pub total_cycles: u32,
     pub is_running: bool,
+    trace_file: Option<File>,
 }
 
 impl Cpu {
@@ -231,7 +238,15 @@ impl Cpu {
             regs: Default::default(),
             total_cycles: 0,
             is_running: false,
+            trace_file: None,
         };
+        cpu.trace_file = Some(OpenOptions::new()
+                            .create(true)
+                            .write(true)
+                            .truncate(true)
+                            .open("trace_log.txt")
+                            .unwrap());
+
         cpu.reset_state();
         cpu
     }
@@ -274,13 +289,31 @@ impl Cpu {
 
         let pc_before = self.regs.pc;
 
+        if WADATSUMI_DEBUG {
+            //let line = format!("PC: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X} LY: {}\n",
+            let line = format!("PC: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X}\n",
+                     //self.total_cycles,
+                     //op.format(&self.ctx, bus).unwrap(),
+                     self.regs.pc,
+                     self.regs.af(),
+                     self.regs.bc(),
+                     self.regs.de(),
+                     self.regs.hl(),
+                     self.regs.sp,
+                     //mem.rb(0xff44)
+                     );
+
+            let trace_file = self.trace_file.as_mut().unwrap();
+            trace_file.write_all(line.as_bytes()).unwrap();
+        }
+
         // Increment PC
         self.regs.pc += 1;
-        
+
         // Execute instruction
         let cycles = instructions::exec(op, &mut self.regs, mem) * 4;
 
-        if INSTR_DEBUG && op != 0x00 {
+        if INSTR_DEBUG {
             let pc_diff = self.regs.pc as i32 - pc_before as i32;
 
             let addr_and_instr =
