@@ -93,6 +93,9 @@ impl Timer {
             }
         }
     }
+    pub fn reset_bios_skip(&mut self) {
+        self.clock.div = 0xABCC;
+    }
 }
 
 

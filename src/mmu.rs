@@ -69,6 +69,7 @@ impl Memory {
             mbc: Mbc::Unknown,
         };
         mem.power_on();
+        mem.timer.reset_bios_skip();
 
         mem
     }
