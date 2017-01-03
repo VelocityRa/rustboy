@@ -248,6 +248,40 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     // TODO: use set_or_else for everything
 
+    macro_rules! daa (
+    ($r:ident) => ({
+        let mut a = r.a as u16;
+
+        if !r.f.n.get() {
+            if r.f.h.get() || (a & 0xF) > 9 {
+                a += 0x06;
+            }
+            if r.f.c.get() || a > 0x9F {
+                a += 0x60;
+            }
+        } else {
+            if r.f.h.get() {
+                a = (a - 0x06) & 0xFF;
+            }
+            if r.f.c.get() || a > 0x9F {
+                a = a.wrapping_sub(0x60);
+            }
+        }
+        r.f.h.unset();
+        r.f.z.unset();
+
+        if a & 0x100 == 0x100 {
+            r.f.c.set();
+        }
+        a &= 0xFF;
+        if a == 0 {
+            r.f.z.set();
+        }
+
+        r.a = a as u8;
+        debug!("DAA result: {}", a);
+    }) );
+
     // macro_rules! rl (
     
     //  )
@@ -303,7 +337,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x24 => inc!(h),                                            // inc_h
         0x25 => dec!(h),                                            // dec_h
         0x26 => ld_n!(h),                                           // ld_hn
-        // 0x27 => { daa(r); 1 },                                      // daa
+        0x27 => { daa!(r); 1 },                                      // daa
         0x28 => jr_n!(r.f.z.get()),                                 // jr_z_n
         0x29 => add_hl!(r.hl()),                                    // add_hlhl
         0x2a => { r.a = m.rb(r.hl()); r.inc_hl(); 2 },              // ldi_ahlm
