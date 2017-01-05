@@ -143,7 +143,7 @@ impl Registers {
     fn dec_hlm(&mut self, m: &mut Memory) {
         self.f.n.set();
         let hl = self.hl();
-        let v = m.rb(hl) - 1;
+        let v = m.rb(hl).wrapping_sub(1);
         m.wb(hl, v);
         if v == 0 {self.f.z.set()} else {self.f.z.unset()};
         if v & 0xF == 0xF {self.f.h.set()} else {self.f.h.unset()};

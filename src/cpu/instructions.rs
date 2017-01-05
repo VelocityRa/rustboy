@@ -63,7 +63,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         3 }) );
 
     macro_rules! jr_n {
-        ($cond:expr) => (if $cond {jr!()} else {r.pc += 1; 2})
+        ($cond:expr) => (if $cond {jr!()} else {r.pc = r.pc.wrapping_add(1); 2})
     }
 
     macro_rules! inc (
@@ -124,7 +124,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.a &= $val;
         r.f.n.unset();
         r.f.h.set();
-        r.f.z.unset();
+        r.f.c.unset();
         if r.a == 0 {r.f.z.set()};
     4 }) );
 
@@ -151,24 +151,21 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let ci = if r.f.c.get() {0x80} else {0};
         let co = $reg & 1;
         $reg = ($reg >> 1) | ci;
-        if co == 1 { r.f.c.set() };
+        r.f.reset();
+        r.f.c.set_if(co == 1);
         $cy
     }) );
 
     macro_rules! rlc (
     ($reg:ident, $n:expr) => ({
-        r.f.n.unset();
-        r.f.h.unset();
-        r.f.z.unset();
+        r.f.reset();
         r.$reg.rotate_left($n);
         r.f.c.set_if(r.$reg & 0x1 == 1);
     4 }) );
 
     macro_rules! rrc (
     ($reg:ident, $n:expr) => ({
-        r.f.n.unset();
-        r.f.h.unset();
-        r.f.z.unset();
+        r.f.reset();
         r.$reg.rotate_right($n);
         r.f.c.set_if(r.$reg & 0x80 == 1);
     4 }) );
@@ -206,6 +203,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     ($reg:expr) => ({
         let a = r.a;
         let b = $reg;
+        r.f.n.set();
         r.f.c.set_if(a < b);
         r.f.h.set_if((a & 0xF) < (b & 0xF));
         r.a = a.wrapping_sub(b);
@@ -218,7 +216,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let j = $reg;
         let c = if r.f.c.get() {1} else {0};
         r.f.n.unset();
-        r.f.h.set_if((i & 0xF) + (j & 0xF) + c > 0xF);
+        r.f.h.set_if((i & 0xF) + (j & 0xF).wrapping_add(c) > 0xF);
         r.f.c.set_if((i as u16 + j as u16 + c as u16) > 0xFF);
         r.a = i.wrapping_add(j).wrapping_add(c);
         r.f.z.set_if(r.a == 0);
@@ -229,21 +227,23 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let a = r.a;
         let b = $reg;
         let c = if r.f.c.get() {1} else {0};
+        r.f.n.set();
         r.f.c.set_if(a < b.wrapping_add(c));
-        r.f.h.set_if((a & 0xF) < (b & 0xF) + c);
+        r.f.h.set_if((a & 0xF) < ((b & 0xF) + c));
         r.a = (a.wrapping_sub(b).wrapping_sub(c)) as u8;
         r.f.z.set_if(r.a == 0);
     1 }) );
 
     macro_rules! ld_hlspn (
     () => ({
+        r.f.reset();
         let b = m.rb(r.bump()) as i8 as i16 as u16;
         let res = b.wrapping_add(r.sp);
         r.h = (res >> 8) as u8;
         r.l = res as u8;
         let tmp = b ^ r.sp ^ r.hl();
-        if tmp & 0x100 != 0 {r.f.c.set()};
-        if tmp & 0x010 != 0 {r.f.h.set()};
+        r.f.c.set_if(tmp & 0x100 != 0);
+        r.f.h.set_if(tmp & 0x010 != 0);
     3 }) );
 
     macro_rules! ld_aIOn (
@@ -255,7 +255,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! daa (
     ($r:ident) => ({
-        let mut a = r.a as u16;
+        let mut a = r.a as i16;
 
         if !r.f.n.get() {
             if r.f.h.get() || (a & 0xF) > 9 {
@@ -269,7 +269,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
                 a = (a - 0x06) & 0xFF;
             }
             if r.f.c.get() || a > 0x9F {
-                a = a.wrapping_sub(0x60);
+                a -= 0x60;
             }
         }
         r.f.h.unset();
@@ -355,7 +355,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x30 => jr_n!(!r.f.c.get()),                                // jr_nc_n
         0x31 => { r.sp = m.rw(r.pc); r.pc += 2; 3 }                 // ld_spnn
         0x32 => { m.wb(r.hl(), r.a); r.dec_hl(); 2 }                // ldd_hlma
-        0x33 => { r.sp += 1; 2 }                                    // inc_sp
+        0x33 => { r.sp = r.sp.wrapping_add(1); 2 }                  // inc_sp
         0x34 => { r.inc_hlm(m); 3 }                                 // inc_hlm
         0x35 => { r.dec_hlm(m); 3 }                                 // dec_hlm
         0x36 => { let pc = m.rb(r.bump()); m.wb(r.hl(), pc); 3 }    // ld_hlmn
@@ -363,7 +363,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x38 => jr_n!(r.f.c.get()),                                 // jr_c_n
         0x39 => { r.add_hlsp(); 2 }                                 // add_hlsp
         0x3a => { r.a = m.rb(r.hl()); r.dec_hl(); 2 }               // ldd_ahlm
-        0x3b => { r.sp -= 1; 2 }                                    // dec_sp
+        0x3b => { r.sp = r.sp.wrapping_sub(1); 2 }                  // dec_sp
         0x3c => inc!(a),                                            // inc_a
         0x3d => dec!(a),                                            // dec_a
         0x3e => ld_n!(a),                                           // ld_an
@@ -588,7 +588,7 @@ fn add_signed(a: u16, b: u8) -> u16 {
 
 fn add_spn(r: &mut Registers, m: &mut mmu::Memory) {
     let b = m.rb(r.bump()) as i8 as i16 as u16;
-    let res = r.sp + b;
+    let res = r.sp.wrapping_add(b);
     let tmp = b ^ res ^ r.sp;
     r.f.c.set_if(tmp & 0x100 != 0);
     r.f.h.set_if(tmp & 0x010 != 0);
