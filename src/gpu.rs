@@ -23,17 +23,27 @@ const PIXEL_COLOR: Color = [40, 88, 200, 255];
 
 const PALETTE_BW: [Color; 4] = [
     [255, 255, 255, 255],
-    [192, 192, 192, 255],
-    [ 96,  96,  96, 255],
+    [148, 148, 148, 255],
+    [ 86,  86,  86, 255],
     [  0,   0,   0, 255],
 ];
 
 const PALETTE_GREEN: [Color; 4] = [
-    [155, 188, 15, 255],
-    [139, 172, 15, 255],
-    [ 48,  98, 48, 255],
-    [ 15,  56, 15, 255],
+    [225, 247, 207, 255],
+    [136, 193, 107, 255],
+    [ 49,  106, 74, 255],
+    [ 7,  24, 31, 255],
 ];
+
+const PALETTE_PUKE_GREEN: [Color; 4] = [
+    [157, 188, 7, 255],
+    [122, 156, 107, 255],
+    [ 53,  99, 56, 255],
+    [ 13,  58, 8, 255],
+];
+
+// TODO: Switch palettes at runtome
+const PALETTE: &'static [Color; 4] = &PALETTE_GREEN;
 
 struct Tiles {
     data: [[[u8; 8]; 8]; NUM_TILES * 2],
@@ -557,9 +567,9 @@ struct Palette {
 fn update_pal(pal: &mut [Color; 4], val: u8) {
     // These registers are indices into the actual palette. See
     // http://problemkaputt.de/pandocs.htm#lcdmonochromepalettes
-    pal[0] = PALETTE_GREEN[((val >> 0) & 0x3) as usize];
-    pal[1] = PALETTE_GREEN[((val >> 2) & 0x3) as usize];
-    pal[2] = PALETTE_GREEN[((val >> 4) & 0x3) as usize];
-    pal[3] = PALETTE_GREEN[((val >> 6) & 0x3) as usize];
+    pal[0] = PALETTE[((val >> 0) & 0x3) as usize];
+    pal[1] = PALETTE[((val >> 2) & 0x3) as usize];
+    pal[2] = PALETTE[((val >> 4) & 0x3) as usize];
+    pal[3] = PALETTE[((val >> 6) & 0x3) as usize];
     info!("BG Color: {:?} val {:02X}", pal, val);
 }
