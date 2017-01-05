@@ -23,6 +23,7 @@ pub struct Emulator {
     is_frame_stepping: bool,
     is_instr_stepping: bool,
     is_debugging: bool,
+    frame_cycles: u32, // cycles left until the frame ends
     pub frame_count: u32,
 }
 
@@ -35,11 +36,13 @@ impl Emulator {
             is_frame_stepping: false,
             is_instr_stepping: false,
             is_debugging: true,
+            frame_cycles: 0,
             frame_count: 0,
         };
 
         // Read rom and move ownership to memory component
         emu.mem.set_rom(try_open_rom(&rom_path));
+        emu.read_header();
 
         // If the rom is more than 32KB, it has VRAM so we need to copy it
         if emu.rom_header.rom_size > 0 {
@@ -48,6 +51,7 @@ impl Emulator {
         emu.mem.copy_rom();
 
         emu.mem.find_mbc(emu.rom_header.cartridge_type);
+
         // Give immutable reference of rom header to memory component
         //emu.mem.borrow_rom_header(&emu.rom_header);
 
@@ -65,24 +69,28 @@ impl Emulator {
 
         // If is_stepping is false, runs for a frame (~70k clock cycles)
         // If it's true runs for just 1 instruction
-        let mut temp_total_cycles = 0;
-        while temp_total_cycles <= SCREEN_REFRESH_INTERVAL {
+
+        while self.frame_cycles < SCREEN_REFRESH_INTERVAL {
             let cycles = self.cpu.exec(&mut self.mem);
             self.mem.timer.step(cycles, &mut self.mem.if_);
             self.mem.gpu.step(cycles, &mut self.mem.if_);
-            
-            temp_total_cycles += cycles;
+
+            self.frame_cycles += cycles;
 
             if self.cpu.get_regs().stop {self.cpu.stop(); return; }
             if self.is_instr_stepping { self.set_running(false) }; // kinda broken
         }
+        if self.frame_cycles >= SCREEN_REFRESH_INTERVAL {
+            self.frame_cycles -= SCREEN_REFRESH_INTERVAL;
+        }
+
         self.frame_count += 1;
         if self.is_frame_stepping { self.set_running(false) };
         // Update gpu image data
         self.mem.gpu.update();
     }
 
-    pub fn read_header(&mut self) {
+    fn read_header(&mut self) {
         self.rom_header = read_header_impl(&self);
     }
     pub fn get_header(&self) -> &CartridgeHeader {
@@ -103,7 +111,7 @@ impl Emulator {
     pub fn toggle_debugging(&mut self) {
         self.is_debugging = !self.is_debugging;
     }
-    
+
 }
 
 impl fmt::Debug for Emulator {
