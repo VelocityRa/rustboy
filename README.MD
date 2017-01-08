@@ -16,7 +16,7 @@ rustboy-emu <path/to/rom>
 
 * http://imrannazar.com/GameBoy-Emulation-in-JavaScript:-The-CPU
 
-* [/r/EmuDev's Slack Team](emudev.slack.com)
+* [/r/EmuDev's Slack Team](https://emudev.slack.com)
 
 * Blargg's Test Roms
 
