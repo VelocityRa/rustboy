@@ -1,6 +1,7 @@
 
 target/
 roms/
+testroms/
 
 # Sublime Text stuff
 *.sublime-workspace
