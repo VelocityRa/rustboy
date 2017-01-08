@@ -40,7 +40,7 @@ mod emulator;
 mod timer;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
-static DEFAULT_LOG_LEVEL: &'static str = "info";
+static DEFAULT_LOG_LEVEL: &'static str = "debug";
 static DEFAULT_LOG_LEVELS: &'static str = "gfx_device_gl=warn,cargo=error";
 static WINDOW_TITLE: &'static str = "Rust Boy Emulator";
 
@@ -70,7 +70,7 @@ fn main() {
             LogLevel::Warn => level_str.yellow().bold(),
             LogLevel::Error => level_str.red().bold(),
         };
-        let record_loc = &record.location().file()[4..];
+        let record_loc = &record.location().file()[4..];    // Trim "src/"
         format!("[{}][{}]: {}", coloured_level, record_loc.cyan(), record.args())
     };
     let mut builder = LogBuilder::new();
@@ -105,7 +105,6 @@ fn main() {
 
     // Initialize emulator
     let mut emu = emulator::Emulator::new(&window, rom_path);
-    emu.read_header();
 
     // Append game name to title
     window.set_title(
@@ -150,7 +149,7 @@ fn main() {
             window.draw_2d(&evt, |c, g| {
                 clear(BG_COLOR, g);
             });
-            
+
             // Emulator rendering (does nothing for now, look below)
             //emu.render(&r, &mut window, &mut framebuffer, &evt);
 
@@ -173,7 +172,7 @@ fn main() {
                 dbg_string.push_str(&format!("\tRegisters\n{:?}\n\n", emu.cpu.get_regs()));
                 dbg_string.push_str(&format!("\tFlags\n{:?}\n\n", emu.cpu.get_flags()));
                 dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));
-                
+
                 // Split lines and place them appropriately
                 let dbg_lines = dbg_string.split('\n');
                 for (line_n, line) in dbg_lines.enumerate() {

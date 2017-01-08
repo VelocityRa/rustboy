@@ -1,0 +1,1 @@
+cargo run -- "C:\Users\Nikos\Documents\Programming Stuff\Rust\rustboy-emu\roms\small\Tetris (JUE) (V1.1) [!].gb"

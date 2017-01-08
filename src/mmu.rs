@@ -25,13 +25,16 @@ use piston_window::PistonWindow;
 
 use timer::Timer;
 use gpu::Gpu;
+use gpu;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 enum Mbc {
+    RomOnly,
     Mbc1,
     Mbc2,
     Mbc3,
     Mbc4,
+    Mbc5,
     Unknown,
 }
 
@@ -51,6 +54,13 @@ pub struct Memory {
     pub gpu: Box<Gpu>,
 
     mbc: Mbc,
+    cart_type: u8,
+    enable_ext_ram: bool,
+    is_ram_mode: bool,   // true -> RAM expansion mode, else ROM mode
+    rom_bank: u8,
+    rom_offset: u16,
+    ram_bank: u8,
+    ram_offset: u16,
 }
 
 impl Memory {
@@ -63,10 +73,17 @@ impl Memory {
             raw_mem: Box::new([0u8; MEM_SIZE]),
             rom_loaded: Vec::new(),
 
-            //rom_header: None,
             timer: Box::new(Timer::new()),
             gpu: Box::new(Gpu::new(window)),
+
             mbc: Mbc::Unknown,
+            cart_type: 0,
+            enable_ext_ram: false,
+            is_ram_mode: false,
+            rom_bank: 0,
+            rom_offset: 0x4000,
+            ram_bank: 0,
+            ram_offset: 0x0000,
         };
         mem.power_on();
         mem.timer.reset_bios_skip();
@@ -78,17 +95,16 @@ impl Memory {
     pub fn copy_vram(&mut self) {
         // TODO: Make faster?
         const VRAM_START: u16 = 0x8000;
-        const VRAM_EXT_START: u16 = 0xA000;
         const VRAM_SIZE: u16 = 8 << 10; // 8K;
         for addr in 0..VRAM_SIZE {
-            self.gpu.vrambanks[0][addr as usize] = self.rom_loaded[(addr + VRAM_START) as usize];
-            self.gpu.vrambanks[1][addr as usize] = self.rom_loaded[(addr + VRAM_EXT_START) as usize];
+            self.gpu.vrambank[addr as usize] = self.rom_loaded[(addr + VRAM_START) as usize];
+            //self.gpu.vrambanks[1][addr as usize] = self.rom_loaded[(addr + VRAM_EXT_START) as usize];
         }
     }
 
     pub fn copy_rom(&mut self) {
         // Copy ROM data to memory
-        self.raw_mem[0x0000..0x4000].copy_from_slice(&self.rom_loaded[0x0000..0x4000]);
+        self.raw_mem[0x0000..0x7FFF].copy_from_slice(&self.rom_loaded[0x0000..0x7FFF]);
     }
 
     pub fn power_on(&mut self) {
@@ -114,11 +130,11 @@ impl Memory {
         self.wb(0xff24, 0x77); // NR50
         self.wb(0xff25, 0xf3); // NR51
         self.wb(0xff26, 0xf1); // NR52
-        self.wb(0xff40, 0xb1); // LCDC, tweaked to turn the window on
+        self.wb(0xff40, 0xb1); // LCDC
         self.wb(0xff42, 0x00); // SCY
         self.wb(0xff43, 0x00); // SCX
-        //self.wb(0xff44, 0x00); // LY
-        //self.wb(0xff45, 0x00); // LYC
+        self.wb(0xff44, 0x00); // LY
+        self.wb(0xff45, 0x00); // LYC
         self.wb(0xff47, 0x1b); // BGP   // 1b for entire palette
         self.wb(0xff48, 0xff); // OBP0
         self.wb(0xff49, 0xff); // OBP1
@@ -148,7 +164,7 @@ impl Memory {
 
         self.raw_mem[addr]
     }
-    
+
     fn read_word_raw(&self, addr: u16) -> u16 {
         let addr = addr as usize;
         assert!(addr <= MEM_SIZE - 1,
@@ -178,19 +194,29 @@ impl Memory {
     // Public members
 
     // Read Byte
-    pub fn rb(&self, addr: u16) -> u8 {
+    // TODO: add 4 to total_cycles for cycle accuracy (not that simple)
+    pub fn rb(&mut self, addr: u16) -> u8 {
         //self.debug_print_addr(addr, true);
+        //self.timer.step(4, &mut self.if_);
         match addr {
-            // TODO: Memory bank switching
+            // ROM (switched bank)
             0x4000 ... 0x7FFF => {
-                    //panic!("Bank switching unimplemented");
-                    self.rom_loaded[addr as usize]
-                },
+                // if addr == 0x4000 {
+                //     info!("read bank: {}  offset: {:04X}  is_ram: {}  addr & 0x3FFF: {:04X}  final: {:04X}", self.rom_bank, self.rom_offset, self.is_ram_mode, addr & 0x3FFF, self.rom_offset + (addr & 0x3FFF));
+                // }
+                self.read_byte_raw(self.rom_offset + (addr & 0x3FFF))
+            },
             // VRAM so let the gpu handle it
-            0x8000 ... 0xBFFF => self.gpu.rb_vram(addr),
+            0x8000 ... 0x9FFF => self.gpu.rb_vram(addr),
+            // External RAM
+            0xA000 ... 0xBFFF => if self.enable_ext_ram {
+                self.read_byte_raw(self.ram_offset + (addr & 0x1FFF))
+                } else {
+                    0xFF
+                },
             // Mirrored memory
             0xE000 ... 0xFDFF => self.read_byte_raw(addr - 0x2000),
-            0xFEA0 ... 0xFEFF => {warn!("Unusable memory accessed"); 0xFF },
+            0xFEA0 ... 0xFEFF => 0xFF, // { warn!("Unusable memory accessed"); 0xFF },
             0xFF00 ... 0xFF79 => self.ioreg_rb(addr),
 
             // Timer Registers
@@ -206,7 +232,7 @@ impl Memory {
     }
 
     // Read word
-    pub fn rw(&self, addr: u16) -> u16 {
+    pub fn rw(&mut self, addr: u16) -> u16 {
         assert!(addr <= 0xFFFF - 1,
          "Invalid memory read: {:04X}", addr);
 
@@ -217,16 +243,60 @@ impl Memory {
     // Write byte
     pub fn wb(&mut self, addr: u16, data: u8) {
         //self.debug_print_addr(addr, false);
+        //self.timer.step(4, &mut self.if_);
         match addr {
-            0x4000 ... 0x7FFF => {
-                //panic!("Bank switching unimplemented"); // self.rom_loaded[addr as u16 as usize],
-                self.rom_loaded[addr as usize] = data;
+            // Enable external RAM if 0x0A was writtten. Disable it otherwise
+            0x0000 ... 0x1FFF => if self.cart_type == 2 || self.cart_type == 3 {
+                self.enable_ext_ram = data & 0x0F == 0x0A;
+            },
+            // Switch ROM bank
+            0x2000 ... 0x3FFF => {
+                match self.mbc {
+                    Mbc::Mbc1 => {
+                        let mut data_lower = data & 0x1F;
+                        if data_lower == 0 { data_lower = 1 };
+
+                        self.rom_bank = self.rom_bank & 0x60 + data_lower;
+                        self.rom_offset = self.rom_bank as u16 * 0x4000;
+                    },
+                    //Mbc::Mbc2 => {},
+                    //Mbc::Mbc3 => {},
+                    //Mbc::Mbc4 => {},
+                    //Mbc::Unknown => {},
+                    _ => panic!("Unsupported MBC {:?}", self.mbc),
+                }
+            }
+            // Switch ROM bank "set" {1-31}-{97-127} and RAM bank
+            0x4000 ... 0x5FFF => {
+                match self.mbc {
+                    Mbc::Mbc1 => {
+                        if self.is_ram_mode {
+                            // RAM mode: Set bank
+                            self.ram_bank = data & 3;
+                            self.ram_offset = self.ram_bank as u16 * 0x2000;
+                            info!("Switch RAM bank. bank: {}  offset: {:04X}", self.ram_bank, self.ram_offset);
+                        } else {
+                            // ROM mode: Set high bits of bank
+                            self.rom_bank = self.rom_bank & 0x1F + ((data & 3) << 5);
+                            self.rom_offset = self.rom_bank as u16 * 0x4000;
+                            info!("Switch ROM bank. bank: {}  offset: {:04X}", self.rom_bank, self.rom_offset);
+                        }
+                    },
+                    _ => panic!("Unsupported MBC {:?}", self.mbc),
+                }
+            }
+            // Mode
+            // 0: ROM mode (no RAM banks, up to 2MB ROM)
+            // 1: RAM mode (4 RAM banks, up to 512kB ROM)
+            0x6000 ... 0x7FFF => self.is_ram_mode = data & 1 == 1,
+            0xA000 ... 0xBFFF => if self.enable_ext_ram {
+                self.write_byte_raw(addr, data);
             },
             // Mirrored memory
             0xE000 ... 0xFDFF => self.write_byte_raw(addr - 0x2000, data),
-            0xFEA0 ... 0xFEFF => warn!("Unusable memory written to"),
+            0xFEA0 ... 0xFEFF => debug!("Unusable memory written to"),
             // VRAM so let the gpu handle it
-            0x8000 ... 0xBFFF => self.gpu.wb_vram(addr, data),
+            0x8000 ... 0x9FFF => self.gpu.wb_vram(addr, data),
             // IO Ports
             0xFF00 ... 0xFF79 => self.ioreg_wb(addr, data),
             // Interrupt enable
@@ -260,12 +330,15 @@ impl Memory {
                     // TODO: Input
                     //0x0 => self.input.rb(addr),
                     0x0 => {
-                        warn!("Input requested (unimplemented) in address {:04X}", addr); 0},
+                        warn!("Input requested (unimplemented) in address {:04X}", addr);
+                        // Return no buttons pressed for now
+                        self.read_byte_raw(addr) & 0b00110000
+                    },
                     0x4 => self.timer.div,
                     0x5 => self.timer.tima,
                     0x6 => self.timer.tma,
                     0x7 => self.timer.tac,
-                    0xf => self.if_,
+                    0xf => 0xE0 | self.if_,
 
                     _ => self.read_byte_raw(addr),
                 }
@@ -295,9 +368,11 @@ impl Memory {
             // I/O Ports (0xFF0x)
             0x0 => {
                 match addr & 0xF {
+                    0x0 => self.write_byte_raw(addr, data),
                     0x1 => {
                         info!("Serial data transfer in address {:04X}, data {}", addr, data as char);
 
+                        // TODO: Maybe open at constructor like trace_log.txt
                         // Open a file in write-only mode, returns `io::Result<File>`
                         let mut file = OpenOptions::new()
                             .append(true)
@@ -329,8 +404,10 @@ impl Memory {
                         //debug!("gpu_wb {:x} {:x}", addr, data);
                         dt
                     },
-                    4 => warn!("LY read request, but it is read-only"),
-                    6 => warn!("DMA transfer requested (unimplemented)"),
+                    // Write to LY normally resets it, but it leads
+                    // to challenging timings so just do nothing
+                    4 => {},
+                    6 => gpu::start_dma_transfer(self, data),
                     _ => self.write_byte_raw(addr, data)
                 }
             }
@@ -341,13 +418,40 @@ impl Memory {
     }
 
     pub fn find_mbc(&mut self, cartridge_type: u8) {
-        // TODO
-        self.mbc = Mbc::Unknown;
+        self.cart_type = cartridge_type;
+
+        match cartridge_type {
+            2 | 3 | 8 | 9 | 0xC | 0xD | 0x10 |
+            0x12 | 0x13 | 0x16 | 0x17 | 0x1A |
+            0x1B | 0x1D | 0x1E | 0xFF => {
+                self.enable_ext_ram = true;
+            }
+            _ => {}
+        };
+
+        self.mbc = match cartridge_type {
+            0x00 => Mbc::RomOnly,
+            0x01 ... 0x03 => Mbc::Mbc1,
+            0x05 ... 0x06 => Mbc::Mbc2,
+            0x0F ... 0x13 => Mbc::Mbc3,
+            0x15 ... 0x17 => Mbc::Mbc4,
+            0x19 ... 0x1E => Mbc::Mbc5,
+
+            _ => Mbc::Unknown,
+        };
+
+        // Only support MBC1 for now
+        match self.mbc {
+            Mbc::RomOnly | Mbc::Mbc1 => {},
+            _ => panic!("Unsupported MBC: {:?}", self.mbc),
+        };
+        info!("Mbc: {:?}. External RAM: {}", self.mbc, self.enable_ext_ram);
     }
+
 
     fn debug_print_addr(&self, addr: u16, read: bool) {
         debug!("{} {:04X} in {}", if read {"Read from"} else {"Write to"}, addr,
-        
+
         match addr {
             0x0000 ... 0x3FFF => "16KB ROM Bank 00",    // (in cartridge, fixed at bank 00)
             0x4000 ... 0x7FFF => "a 16KB ROM Bank", // (in cartridge, switchable bank number)

@@ -17,7 +17,7 @@ use mmu::Memory;
 
 // CPU Clock speed
 // TODO: Disable if log level > TRACE
-pub const INSTR_DEBUG: bool = false;    // very laggy
+pub const INSTR_DEBUG: bool = false;    // very laggy, needs 'trace' log level
 pub const WADATSUMI_DEBUG: bool = true;    // Format debug text the same way Wadatsume does (for easy comparison)
 
 #[allow(dead_code)]
@@ -291,16 +291,17 @@ impl Cpu {
 
         if WADATSUMI_DEBUG {
             //let line = format!("PC: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X} LY: {}\n",
-            let line = format!("PC: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X}\n",
+            let line = format!("PC[0x{:02X}]: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X}   LY: {:02X}\n",
                      //self.total_cycles,
                      //op.format(&self.ctx, bus).unwrap(),
+                     op,
                      self.regs.pc,
                      self.regs.af(),
                      self.regs.bc(),
                      self.regs.de(),
                      self.regs.hl(),
                      self.regs.sp,
-                     //mem.rb(0xff44)
+                     mem.rb(0xff44)
                      );
 
             let trace_file = self.trace_file.as_mut().unwrap();
@@ -352,38 +353,42 @@ impl Cpu {
         self.total_cycles += cycles;
 
         // Interrupt handling
-        if self.regs.ime && (mem.ie_ & mem.if_ != 0) {
-            let interrupts = mem.ie_ & mem.if_;
+        let interrupts = mem.ie_ & mem.if_;
+        macro_rules! print_interrupt (
+        ($s:expr) => {
+            warn!("{} IF: {:#08b}", $s.magenta(), mem.if_);
+        } );
 
+        if self.regs.ime && (interrupts != 0) {
             // Vertical blank (ISR: 40 )
-            if interrupts & 0b1 != 0 {
+            if interrupts & Interrupt::Vblank as u8 != 0 {
+                mem.if_ &= !(Interrupt::Vblank as u8);
                 rst!(self, mem, 0x40);
-                mem.if_ &= 0xFF - 0b1;
-                warn!("{}","VBLANK".magenta());
+                print_interrupt!("VBLANK");
             }
             // LCD status triggers (ISR: 48 )
-            if interrupts & 0b10 != 0 {
+            if interrupts & Interrupt::LCDStat as u8 != 0 {
+                mem.if_ &= !(Interrupt::LCDStat as u8);
                 rst!(self, mem, 0x48);
-                mem.if_ &= 0xFF - 0b10;
-                warn!("{}","LCD status triggers".magenta());
+                print_interrupt!("LCD status triggers");
             }
             // Timer overflow (ISR: 50 )
-            if interrupts & 0b100 != 0 {
+            if interrupts & Interrupt::Timer as u8 != 0 {
+                mem.if_ &= !(Interrupt::Timer as u8);
                 rst!(self, mem, 0x50);
-                mem.if_ &= 0xFF - 0b100;
-                warn!("{}","Timer overflow".magenta());
+                print_interrupt!("Timer overflow");
             }
             // Serial link (ISR: 58 )
-            if interrupts & 0b1000 != 0 {
+            if interrupts & Interrupt::Serial as u8 != 0 {
+                mem.if_ &= !(Interrupt::Serial as u8);
                 rst!(self, mem, 0x58);
-                mem.if_ &= 0xFF - 0b1000;
-                warn!("{}","Serial link".magenta());
+                print_interrupt!("Serial link");
             }
             // LCD status triggers (ISR: 60 )
-            if interrupts & 0b10000 != 0 {
+            if interrupts & Interrupt::Joypad as u8 != 0 {
+                mem.if_ &= !(Interrupt::Joypad as u8);
                 rst!(self, mem, 0x60);
-                mem.if_ &= 0xFF - 0b10000;
-                warn!("{}","Joypad press".magenta());
+                print_interrupt!("Joypad press");
             }
         }
 

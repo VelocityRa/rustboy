@@ -69,11 +69,9 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     macro_rules! inc (
         ($reg:ident) => ({
             r.$reg = r.$reg.wrapping_add(1);
-            r.f.h.unset();
-            r.f.z.unset();
             r.f.n.unset();
-            if r.$reg == 0 {r.f.z.set()};
-            if r.$reg & 0xF == 0 {r.f.h.set()};
+            r.f.z.set_if(r.$reg == 0);
+            r.f.h.set_if(r.$reg & 0xF == 0);
         1 }) );
 
     macro_rules! inc_16(
@@ -85,11 +83,9 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     macro_rules! dec (
         ($reg:ident) => ({
             r.$reg = r.$reg.wrapping_sub(1);
-            r.f.h.unset();
-            r.f.z.unset();
             r.f.n.set();
-            if r.$reg == 0 {r.f.z.set()};
-            if r.$reg & 0xF == 0xF {r.f.h.set()};
+            r.f.z.set_if(r.$reg == 0);
+            r.f.h.set_if(r.$reg & 0xF == 0xF);
         1 }) );
 
     macro_rules! dec_16(
@@ -109,14 +105,14 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     ($val:expr) => ({
         r.a ^= $val;
         r.f.reset();
-        if r.a == 0 {r.f.z.set()};
+        r.f.z.set_if(r.a == 0);
     4 }) );
 
     macro_rules! or_a (
     ($val:expr) => ({
         r.a |= $val;
         r.f.reset();
-        if r.a == 0 {r.f.z.set()};
+        r.f.z.set_if(r.a == 0);
     4 }) );
 
     macro_rules! and_a (
@@ -125,7 +121,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.n.unset();
         r.f.h.set();
         r.f.c.unset();
-        if r.a == 0 {r.f.z.set()};
+        r.f.z.set_if(r.a == 0);
     4 }) );
 
     macro_rules! cp_a (
@@ -134,7 +130,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         r.f.n.set();
         if r.a == v {r.f.z.set()} else {r.f.z.unset()};
         if r.a < v {r.f.c.set()} else {r.f.c.unset()};
-        if (r.a & 0xF) < (v & 0xF) {r.f.h.set()} else {r.f.h.unset()};
+        r.f.h.set_if((r.a & 0xF) < (v & 0xF));
         //debug!("{:02X} & 0xF < ({:2X} & 0xF)    c:{:?} h:{:?} ", r.a, v, r.f.c.get(),r.f.h.get());
     4 }) );
 
@@ -212,26 +208,31 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
     macro_rules! adc_a (
     ($reg:expr) => ({
-        let i = r.a;
-        let j = $reg;
+        let a = r.a as u16;
+        let b = $reg as u16;
         let c = if r.f.c.get() {1} else {0};
+        let v = a.wrapping_add(b).wrapping_add(c);
+
         r.f.n.unset();
-        r.f.h.set_if((i & 0xF) + (j & 0xF).wrapping_add(c) > 0xF);
-        r.f.c.set_if((i as u16 + j as u16 + c as u16) > 0xFF);
-        r.a = i.wrapping_add(j).wrapping_add(c);
-        r.f.z.set_if(r.a == 0);
+        r.f.h.set_if(((a & 0x0F) + (b & 0x0F) + c) > 0x0F);
+        r.f.c.set_if(v > 0xFF);
+        r.f.z.set_if((v & 0xFF) == 0);
+        r.a = v as u8;
     1 }) );
 
     macro_rules! sbc_a (
     ($reg:expr) => ({
-        let a = r.a;
-        let b = $reg;
+        let a = r.a as i16;
+        let b = $reg as i16;
         let c = if r.f.c.get() {1} else {0};
+        let v = a.wrapping_sub(b).wrapping_sub(c);
+
+        warn!("a {}, b {}, c {}",a,b,c);
         r.f.n.set();
-        r.f.c.set_if(a < b.wrapping_add(c));
-        r.f.h.set_if((a & 0xF) < ((b & 0xF) + c));
-        r.a = (a.wrapping_sub(b).wrapping_sub(c)) as u8;
-        r.f.z.set_if(r.a == 0);
+        r.f.c.set_if(v < 0);
+        r.f.h.set_if(((((a as i16) & 0x0F) - ((b as i16) & 0x0F) - (c as i16)) < 0));
+        r.f.z.set_if((v & 0xFF) == 0);
+        r.a = v as u8;
     1 }) );
 
     macro_rules! ld_hlspn (
@@ -358,13 +359,13 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x33 => { r.sp = r.sp.wrapping_add(1); 2 }                  // inc_sp
         0x34 => { r.inc_hlm(m); 3 }                                 // inc_hlm
         0x35 => { r.dec_hlm(m); 3 }                                 // dec_hlm
-        0x36 => { let pc = m.rb(r.bump()); m.wb(r.hl(), pc); 3 }    // ld_hlmn
+        0x36 => { let v = m.rb(r.bump()); m.wb(r.hl(), v); 3 }      // ld_hlmn
         0x37 => { r.f.n.unset(); r.f.h.unset(); r.f.c.set(); 1 }    // scf
         0x38 => jr_n!(r.f.c.get()),                                 // jr_c_n
         0x39 => { r.add_hlsp(); 2 }                                 // add_hlsp
         0x3a => { r.a = m.rb(r.hl()); r.dec_hl(); 2 }               // ldd_ahlm
         0x3b => { r.sp = r.sp.wrapping_sub(1); 2 }                  // dec_sp
-        0x3c => inc!(a),                                            // inc_a
+        0x3c => {inc!(a); info!("inc a: {}",r.a); 1 },                                            // inc_a
         0x3d => dec!(a),                                            // dec_a
         0x3e => ld_n!(a),                                           // ld_an
         0x3f => { r.f.h.unset(); r.f.n.unset(); r.f.c.toggle(); 1 } // ccf
@@ -507,7 +508,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
         0xc0 => ret_if!(!r.f.z.get()),                              // ret_nz
         0xc1 => {let sp=r.sp; r.bc_set(m.rw(sp)); r.sp += 2; 3},    // pop_bc
-        0xc2 => jp_n!(!r.f.z.get()),                                // jp_nz_nn
+        0xc2 => { warn!("jp at {:04X}",r.pc);jp_n!(!r.f.z.get())},                                // jp_nz_nn
         0xc3 => jp!(),                                              // jp_nn
         0xc4 => call_if!(!r.f.z.get()),                             // call_nz_n
         0xc5 => push!(bc),                                          // push_bc
@@ -546,7 +547,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xe3 => xx(),                                               // xx
         0xe4 => xx(),                                               // xx
         0xe5 => push!(hl),                                          // push_hl
-        0xe6 => { and_a!(m.rb(r.bump())); 2 }                       // and_an
+        0xe6 => {and_a!(m.rb(r.bump())); warn!("and a:{:02X}",r.a); 2 }                       // and_an
         0xe7 => rst!(0x20),                                         // rst_20
         0xe8 => { add_spn(r, m); 4 }                                // add_spn
         0xe9 => { r.pc = r.hl(); 1 }                                // jp_hl

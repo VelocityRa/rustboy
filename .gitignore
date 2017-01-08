@@ -1,7 +1,8 @@
-
+# Misc
 target/
 roms/
 testroms/
+/.gtm/
 
 # Sublime Text stuff
 *.sublime-workspace

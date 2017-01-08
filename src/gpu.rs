@@ -4,13 +4,14 @@
 #[allow(dead_code)]
 
 use cpu::Interrupt;
+use mmu::Memory;
 
 use piston::input;
 use piston_window::*;
 use graphics::types::SourceRectangle;
 
 const VRAM_SIZE: usize = 8 << 10; // 8K
-const OAM_SIZE: usize = 0xa0;     // 0xfe00 - 0xfe9f is OAM
+pub const OAM_SIZE: usize = 0x9F;     // 0xfe00 - 0xfe9f is OAM
 const CGB_BP_SIZE: usize = 64;    // 64 bytes of extra memory
 const NUM_TILES: usize = 192;     // number of in-memory tiles
 
@@ -46,9 +47,9 @@ const PALETTE_PUKE_GREEN: [Color; 4] = [
 const PALETTE: &'static [Color; 4] = &PALETTE_GREEN;
 
 struct Tiles {
-    data: [[[u8; 8]; 8]; NUM_TILES * 2],
+    data: [[[u8; 8]; 8]; NUM_TILES],
     need_update: bool,
-    to_update: [bool; NUM_TILES * 2],
+    to_update: [bool; NUM_TILES],
 }
 
 pub struct Gpu {
@@ -58,14 +59,16 @@ pub struct Gpu {
 
     pub is_cgb: bool,
     pub is_sgb: bool,
-
+    c: u32,                                                      //remove
+    d: u32,
     mode: Mode,
 
     clock: u32,
 
-    pub vrambanks: Box<[[u8; VRAM_SIZE]; 2]>,
-    // Selected vram bank
-    vrambank: u8,
+    pub vrambank: Box<[u8; VRAM_SIZE]>,
+
+    // Selects vrambank (only 0 supported since we don't do CGB)
+    vrambank_sel: u8,
 
     // 0xff40 - LCD control (LCDC) - in order from most to least significant bit
     pub lcdon: bool,    // LCD monitor turned on or off?
@@ -88,6 +91,23 @@ pub struct Gpu {
     // 0xff43 - SCX - Scroll X
     scx: u8,
     // 0xff44 - LY - LCDC Y-Coordinate
+
+/*
+    mehcode [2:09 AM]
+    Some notes
+    - LY increments at the 0th cycle of every scanline
+    - LY is reset to 0 on the 5th cycle of the 153rd (last) scanline
+    - A scanline is exactly 456 T-cycles
+
+    [2:10]
+    Just a simple loop with a counter that ignores proper PPU operation should be able to match LY like that
+
+    [2:10]
+    But the comparison logic is tricky (LYC) (edited)
+
+    [2:10]
+    But then again I don’t think blargg uses that
+*/
     ly: u8,
     // 0xff45 - LYC - LY Compare
     lyc: u8,
@@ -120,14 +140,15 @@ impl Gpu {
         let mut gpu: Gpu = Gpu {
             image_data: Box::new([255; HEIGHT * WIDTH * 4]),
             oam: [0; OAM_SIZE],
-
+            c:0,
+            d:1,
             is_cgb: false,
             is_sgb: false,
-            
+
             clock: 0,
-            vrambanks: Box::new([[0; VRAM_SIZE];  2]),
-            vrambank: 0,
-            
+            vrambank: Box::new([0; VRAM_SIZE]),
+            vrambank_sel: 0,
+
             mode: Mode::RdOam,
             wx: 0, wy: 0, obp1: 0, obp0: 0, bgp: 0,
             lyc: 0, ly: 0, scx: 0, scy: 0,
@@ -144,8 +165,8 @@ impl Gpu {
 
             tiles: Box::new(Tiles {
                 need_update: true,  // Does this need to be true?
-                to_update: [true;  NUM_TILES * 2],
-                data: [[[0; 8]; 8]; NUM_TILES * 2],
+                to_update: [true;  NUM_TILES],
+                data: [[[0; 8]; 8]; NUM_TILES],
             }),
 
             img: {
@@ -153,10 +174,18 @@ impl Gpu {
                 Image::new().src_rect(r)
             }
         };
-        
+
         for i in 0..HEIGHT * WIDTH * 4 {
             gpu.image_data[(i) as usize] = 0; //rand::random();
         }
+
+        // Is this needed?
+        update_pal(&mut gpu.pal.bg, 0xE4);
+        update_pal(&mut gpu.pal.obp0, 0xE4);
+        update_pal(&mut gpu.pal.obp1, 0xE4);
+
+        // BIOS SKIP
+        gpu.clock = 0xABCC % 456;
 
         // for y in 0..HEIGHT {
         //     for x in 0..WIDTH {
@@ -168,7 +197,7 @@ impl Gpu {
 
     pub fn display<W: Window>(&mut self, window: &mut PistonWindow<W>, evt: &input::Event) {
         //self.update();
-        
+
         // window.draw_2d(&evt, |c, g| {
         //     self.img.draw(&framebuffer, &c.draw_state, c.transform, g);
         // })
@@ -177,7 +206,7 @@ impl Gpu {
         // window.draw_2d(evt, |c, g| {
         //     for y in 0..HEIGHT {
         //         for x in 0..WIDTH {
-                    
+
         //         }
         //     }
         // });
@@ -210,8 +239,8 @@ impl Gpu {
     }
     pub fn rb_vram(&self, addr: u16) -> u8 {
         match addr {
-            0x8000 ... 0x9FFF => self.vrambanks[0][addr as usize - 0x8000],
-            0xA000 ... 0xBFFF => self.vrambanks[1][addr as usize - 0xA000],
+            0x8000 ... 0x9FFF => self.vrambank[addr as usize - 0x8000],
+            //0xA000 ... 0xBFFF => self.vrambanks[1][addr as usize - 0xA000],
             _ => unreachable!()
         }
     }
@@ -220,13 +249,13 @@ impl Gpu {
         match addr {
             0x8000 ... 0x9FFF => {
                 //trace!("writing to VRAM1 {:04X}  data {:02X}", addr - 0x8000, data);
-                self.vrambanks[0][addr as usize - 0x8000] = data;
-            }
-            0xA000 ... 0xBFFF => {
-                //trace!("writing to VRAM2 {:04X}  data {:02X}", addr - 0xA000 , data);
-                self.vrambanks[1][addr as usize - 0xA000] = data;
-            }
-            _ => unreachable!()
+                self.vrambank[addr as usize - 0x8000] = data;
+            },
+            // 0xA000 ... 0xBFFF => {
+            //    //trace!("writing to VRAM2 {:04X}  data {:02X}", addr - 0xA000 , data);
+            //    self.vrambanks[1][addr as usize - 0xA000] = data;
+            // }
+            _ => { unreachable!(); }
         }
     }
 
@@ -255,7 +284,7 @@ impl Gpu {
 
             0x42 => self.scy,
             0x43 => self.scx,
-            0x44 => self.ly,
+            0x44 => 0,//self.ly,
             0x45 => self.lyc,
             // 0x46 is DMA transfer, can't read
             0x47 => self.bgp,
@@ -263,7 +292,7 @@ impl Gpu {
             0x49 => self.obp1,
             0x4a => self.wy,
             0x4b => self.wx,
-            0x4f => self.vrambank,
+            0x4f => self.vrambank_sel,
 
             _ => 0xff
         }
@@ -306,7 +335,7 @@ impl Gpu {
             0x49 => { self.obp1 = val; update_pal(&mut self.pal.obp1, val); }
             0x4a => { self.wy = val; }
             0x4b => { self.wx = val; }
-            0x4f => { if self.is_cgb { self.vrambank = val & 1; } }
+            0x4f => { if self.is_cgb { self.vrambank_sel = val & 1; } }
 
             _ => {}
         }
@@ -367,7 +396,7 @@ impl Gpu {
             Mode::VBlank => {
                 // TODO: a frame is ready, it should be put on screen at this
                 // point
-                //debug!("VBlank!");
+                debug!("GPU: VBlank!");
                 *if_ |= Interrupt::Vblank as u8;
                 if self.mode1int {
                     *if_ |= Interrupt::LCDStat as u8;
@@ -383,8 +412,11 @@ impl Gpu {
     }
 
     fn update_tileset(&mut self) {
+
         let tiles = &mut *self.tiles;
         let iter = tiles.to_update.iter_mut();
+        info!("Updating tileset... Tiles: {}", iter.len());
+
         for (i, slot) in iter.enumerate().filter(|&(_, &mut i)| i) {
             *slot = false;
 
@@ -402,10 +434,10 @@ impl Gpu {
                 // All tiles are located 0x8000-0x97ff => 0x0000-0x17ff in VRAM
                 // meaning that the index is simply an index into raw VRAM
                 let (mut lsb, mut msb) = if i < NUM_TILES {
-                    (self.vrambanks[0][addr], self.vrambanks[0][addr + 1])
+                    (self.vrambank[addr], self.vrambank[addr + 1])
                 } else {
-                    (self.vrambanks[1][addr], self.vrambanks[1][addr + 1])
-                    //panic!("second VRAM bank used");
+                    panic!("second VRAM bank used");
+                    //(self.vrambanks[1][addr], self.vrambanks[1][addr + 1])
                 };
 
                 // LSB is the right-most pixel.
@@ -455,12 +487,17 @@ impl Gpu {
         if self.tiledata {
             base + tilei as usize
         } else {
-            (base as isize + (tilei as i8 as isize)) as usize
+            base + (tilei as isize + 128 as isize) as usize
+            //(base as isize + (tilei as i8 as isize)) as usize
         }
     }
 
     fn render_background(&mut self, scanline: &mut [u8; WIDTH]) {
-
+        //self.update_tileset();
+        // for i in 0..(VRAM_SIZE-1) {
+        //    let b = self.vrambank[i];
+        //    if b != 0 { print!("{:04X} ", i) }
+        // }
         let mapbase = self.bgbase();
         let line = self.ly as usize + self.scy as usize;
 
@@ -482,35 +519,46 @@ impl Gpu {
         // (&tiles[0]) == 0x9000, where if tiledata = 1, (&tiles[0]) = 0x8000.
         // This implies that the indices are treated as signed numbers.
         let mut i = 0;
-        let tilebase = if !self.tiledata {256} else {0};
+        let tilebase = 0; //if !self.tiledata {256} else {0};
 
-        debug!("render background. mapbase:{:x} scx:{} scy:{}", mapbase, self.scx, self.scy);
+        // TODO: Move elsewhere
+        if self.is_cgb {
+            panic!("CGB NOT SUPPORTED");
+        }
+
+        trace!("render background. mapbase:{:x} scx:{} scy:{}", mapbase, self.scx, self.scy);
+
+        if self.d % 10000 == 0 {self.c += 1}         // HACKHACK
+        self.d+=1;
+
         loop {
             // Backgrounds wrap around, so calculate the offset into the bgmap
             // each loop to check for wrapping
             let mapoff = ((i as usize + self.scx as usize) % 256) >> 3;
-            let tilei = self.vrambanks[0][mapbase + mapoff];
+            let tilei = self.vrambank[mapbase + mapoff];
 
             // tiledata = 0 => tilei is a signed byte, so fix it here
             let tilebase = self.add_tilei(tilebase, tilei);
+            //println!("tilebase: {}", tilebase);
 
             let row;
             let bgpri;
             let hflip;
             let bgp;
-            if self.is_cgb {
-                panic!("CGB NOT SUPPORTED");
-            } else {
-                row = self.tiles.data[tilebase as usize][y as usize];
-                bgpri = false;
-                hflip = false;
-                bgp = self.pal.bg;
+
+            row = self.tiles.data[tilei as usize ][y as usize];
+            bgpri = false;
+            hflip = false;
+            bgp = self.pal.bg;
+
+            if row.iter().any(|&x| x != 0) {
+                println!("row: {:?}", row);
             }
 
             while x < 8 && i < WIDTH as u8 {
                 let colori = row[if hflip {7 - x} else {x} as usize];
                 let color = bgp[colori as usize];
-
+                //print!("{} ", colori);
                 // To indicate bg priority, list a color >= 4
                 scanline[i as usize] = if bgpri {4} else {colori};
 
@@ -540,14 +588,26 @@ impl Gpu {
     }
 
     fn render_window(&mut self) {
-        
+
     }
 
     fn render_sprites(&mut self) {
-        
-    }
 
+    }
 }
+
+pub fn start_dma_transfer(mem: &mut Memory, val: u8) {
+    debug!("OAM DMA tranfer from 0x{:02X}00", val);
+
+    if val > 0xF1 { error!("Invalid OAM DMA address"); return; }
+
+    let high_byte = (val as u16) << 8;
+
+    for i in 0..OAM_SIZE {
+        mem.gpu.oam[i as usize] = mem.rb(high_byte | i as u16);
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum Mode {
     HBlank = 0x00, // mode 0
