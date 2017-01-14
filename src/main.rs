@@ -17,6 +17,7 @@ extern crate gfx_core;
 extern crate gfx_graphics;
 extern crate gfx_device_gl;
 extern crate gfx_text;
+extern crate fps_counter;
 
 use std::env;
 use env_logger::LogBuilder;
@@ -28,6 +29,7 @@ use glfw_window::GlfwWindow;
 use piston::window::AdvancedWindow;
 use piston::event_loop::EventLoop;
 use piston::input::*;
+use fps_counter::FPSCounter;
 
 use graphics::clear;
 use texture::*;
@@ -52,7 +54,7 @@ const TEXT_TITLE_COLOR: [f32; 4] = [210./255., 210./255., 210./255., 1.0];
 const NATIVE_DIMS: [u32; 2] = [160, 144];
 const SCREEN_DIMS: [u32; 2] = [NATIVE_DIMS[0] * SCREEN_MULT,
                                NATIVE_DIMS[1] * SCREEN_MULT];
-const FONT_SIZE: u8 = 1 + SCREEN_MULT as u8 * 5;
+const FONT_SIZE: u8 = (1. + SCREEN_MULT as f32 * 4.5) as u8;
 
 
 fn main() {
@@ -129,6 +131,9 @@ fn main() {
         Texture::create(&mut window.factory, Format::Rgba8, &*emu.mem.gpu.image_data, NATIVE_DIMS, &ts)
         .expect("Couldn't create framebuffer texture");
 
+    // Set up framerate counter
+    let mut fps = FPSCounter::new();
+
     // Main Event Loop
     while let Some(evt) = window.next() {
         //debug!("EVENT: {:?}", evt);
@@ -168,7 +173,7 @@ fn main() {
             // TODO: Move to seperate module (debugger.rs)
             // Debugger rendering
             if emu.is_debugging() {
-                let mut dbg_string = format!("\tEmulator\n{:?}\n\n", emu);
+                let mut dbg_string = format!("\tEmulator\n{:?}\n FPS: {}\n\n", emu, fps.tick());
                 dbg_string.push_str(&format!("\tRegisters\n{:?}\n\n", emu.cpu.get_regs()));
                 dbg_string.push_str(&format!("\tFlags\n{:?}\n\n", emu.cpu.get_flags()));
                 dbg_string.push_str(&format!("\tTimers\n{:?}\n\n", emu.mem.get_timers()));

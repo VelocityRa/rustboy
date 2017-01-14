@@ -25,6 +25,7 @@ gfx_core = "*"
 gfx_device_gl = "*"
 gfx_text = "*"
 
+fps_counter="*"
 
 [profile.release]
 debug = true
