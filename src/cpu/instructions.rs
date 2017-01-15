@@ -155,15 +155,15 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
     macro_rules! rlc (
     ($reg:ident, $n:expr) => ({
         r.f.reset();
-        r.$reg.rotate_left($n);
+        r.$reg = r.$reg.rotate_left($n);
         r.f.c.set_if(r.$reg & 0x1 == 1);
     4 }) );
 
     macro_rules! rrc (
     ($reg:ident, $n:expr) => ({
         r.f.reset();
-        r.$reg.rotate_right($n);
-        r.f.c.set_if(r.$reg & 0x80 == 1);
+        r.$reg = r.$reg.rotate_right($n);
+        r.f.c.set_if(r.$reg & 0x80 != 0);
     4 }) );
 
     macro_rules! add_hl(
@@ -252,46 +252,47 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let b = m.rb(r.bump()) as u16;
         r.a = m.rb(0xff00 | b);
     3 }) );
+
     // TODO: use set_or_else for everything
 
     macro_rules! daa (
     ($r:ident) => ({
-        let mut a = r.a as i16;
+        let mut a = r.a as u16;
 
-        if !r.f.n.get() {
-            if r.f.h.get() || (a & 0xF) > 9 {
-                a += 0x06;
-            }
-            if r.f.c.get() || a > 0x9F {
-                a += 0x60;
-            }
+        let c = r.f.c.get();
+        let h = r.f.h.get();
+        let n = r.f.n.get();
+
+        let mut correction = if c {
+            0x60u16
         } else {
-            if r.f.h.get() {
-                a = (a - 0x06) & 0xFF;
-            }
-            if r.f.c.get() || a > 0x9F {
-                a -= 0x60;
-            }
-        }
-        r.f.h.unset();
-        r.f.z.unset();
+            0x00u16
+        };
 
-        if a & 0x100 == 0x100 {
+        if h || (!n && a & 0x0F > 9) {
+            correction |= 0x06;
+        }
+
+        if c || (!n && a > 0x99) {
+            correction |= 0x60;
+        }
+
+        if n {
+            a = a.wrapping_sub(correction);
+        } else {
+            a = a.wrapping_add(correction);
+        }
+
+        if (correction << 2 & 0x100) != 0 {
             r.f.c.set();
         }
-        a &= 0xFF;
-        if a == 0 {
-            r.f.z.set();
-        }
 
-        r.a = a as u8;
-        debug!("DAA result: {}", a);
+        // Half-carry is always unset (unlike a Z-80)
+        r.f.h.unset();
+        r.f.z.set_if(a & 0xFF == 0);
+
+        r.a = (a & 0xFF) as u8;
     }) );
-
-    // macro_rules! rl (
-
-    //  )
-
 
     // if inst != 0 {
     //  info!("Decoding {:02X}", inst);
