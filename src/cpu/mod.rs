@@ -237,7 +237,7 @@ impl Cpu {
         let mut cpu: Cpu = Cpu {
             regs: Default::default(),
             total_cycles: 0,
-            is_running: false,
+            is_running: true,
             trace_file: None,
         };
         cpu.trace_file = Some(OpenOptions::new()
@@ -281,17 +281,19 @@ impl Cpu {
     // Executes 1 instruction
     pub fn exec(&mut self, mem: &mut Memory) -> u32 {
 
-        // Interrupt step
-        self.regs.int_step();
+        // Interrupts
+        if self.handle_interrupts(mem) {return 0};
 
         // Fetch opcode
         let op: u8 = mem.rb(self.regs.pc);
 
+        // Save previous pc
         let pc_before = self.regs.pc;
 
         if WADATSUMI_DEBUG {
-            //let line = format!("PC: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X} LY: {}\n",
-            let line = format!("PC[0x{:02X}]: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X}   LY: {:02X}\n",
+            let ff44 = mem.rb(0xff44);
+            // let line = format!("PC[0x{:02X}]: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X} IE: {:08b} IF: {:08b} DIV: {} LY: {:02X}\n",
+            let line = format!("PC[0x{:02X}]: 0x{:04X} AF: 0x{:04X} BC: 0x{:04X} DE: 0x{:04X} HL: 0x{:04X} SP: 0x{:04X} IE: {:08b} IF: {:08b}\n",
                      //self.total_cycles,
                      //op.format(&self.ctx, bus).unwrap(),
                      op,
@@ -301,11 +303,24 @@ impl Cpu {
                      self.regs.de(),
                      self.regs.hl(),
                      self.regs.sp,
-                     mem.rb(0xff44)
-                     );
+                      mem.ie_,
+                      mem.if_,
+                    //  mem.timer.div,
+                    //  ff44
+            );
 
             let trace_file = self.trace_file.as_mut().unwrap();
             trace_file.write_all(line.as_bytes()).unwrap();
+        }
+
+        // HALT
+        if self.regs.halt {
+            if mem.ie_ & mem.if_ != 0 {
+                self.regs.halt = false;
+            }
+        }
+        if self.regs.halt {
+            return 4;
         }
 
         // Increment PC
@@ -352,12 +367,18 @@ impl Cpu {
 
         self.total_cycles += cycles;
 
-        // Interrupt handling
+        //debug!("Cycles: {}", self.total_cycles);
+
+        return cycles;
+    }
+
+    fn handle_interrupts(&mut self, mem: &mut Memory) -> bool {
+        self.regs.int_step();
         let interrupts = mem.ie_ & mem.if_;
-        macro_rules! print_interrupt (
-        ($s:expr) => {
-            warn!("{} IF: {:#08b}", $s.magenta(), mem.if_);
-        } );
+            macro_rules! print_interrupt (
+            ($s:expr) => {
+                warn!("{} IF: {:#08b}", $s.magenta(), mem.if_);
+            } );
 
         if self.regs.ime && (interrupts != 0) {
             // Vertical blank (ISR: 40 )
@@ -390,12 +411,11 @@ impl Cpu {
                 rst!(self, mem, 0x60);
                 print_interrupt!("Joypad press");
             }
+            return true;
         }
-
-        //debug!("Cycles: {}", self.total_cycles);
-
-        return cycles;
+        return false;
     }
+
 }
 
 impl fmt::Debug for Registers {
