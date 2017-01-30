@@ -227,7 +227,6 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         let c = if r.f.c.get() {1} else {0};
         let v = a.wrapping_sub(b).wrapping_sub(c);
 
-        warn!("a {}, b {}, c {}",a,b,c);
         r.f.n.set();
         r.f.c.set_if(v < 0);
         r.f.h.set_if(((((a as i16) & 0x0F) - ((b as i16) & 0x0F) - (c as i16)) < 0));
@@ -344,7 +343,7 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x24 => inc!(h),                                            // inc_h
         0x25 => dec!(h),                                            // dec_h
         0x26 => ld_n!(h),                                           // ld_hn
-        0x27 => { daa!(r); 1 },                                      // daa
+        0x27 => { daa!(r); 1 },                                     // daa
         0x28 => jr_n!(r.f.z.get()),                                 // jr_z_n
         0x29 => add_hl!(r.hl()),                                    // add_hlhl
         0x2a => { r.a = m.rb(r.hl()); r.inc_hl(); 2 },              // ldi_ahlm
@@ -366,7 +365,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x39 => { r.add_hlsp(); 2 }                                 // add_hlsp
         0x3a => { r.a = m.rb(r.hl()); r.dec_hl(); 2 }               // ldd_ahlm
         0x3b => { r.sp = r.sp.wrapping_sub(1); 2 }                  // dec_sp
-        0x3c => {inc!(a); info!("inc a: {}",r.a); 1 },                                            // inc_a
+        //0x3c => {inc!(a); info!("inc a: {}",r.a); 1 },                                            // inc_a
+        0x3c => inc!(a),                                            // inc_a
         0x3d => dec!(a),                                            // dec_a
         0x3e => ld_n!(a),                                           // ld_an
         0x3f => { r.f.h.unset(); r.f.n.unset(); r.f.c.toggle(); 1 } // ccf
@@ -509,7 +509,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
 
         0xc0 => ret_if!(!r.f.z.get()),                              // ret_nz
         0xc1 => {let sp=r.sp; r.bc_set(m.rw(sp)); r.sp += 2; 3},    // pop_bc
-        0xc2 => { warn!("jp at {:04X}",r.pc);jp_n!(!r.f.z.get())},                                // jp_nz_nn
+        //0xc2 => { warn!("jp at {:04X}",r.pc);jp_n!(!r.f.z.get())},                                // jp_nz_nn
+        0xc2 => jp_n!(!r.f.z.get()),                                // jp_nz_nn
         0xc3 => jp!(),                                              // jp_nn
         0xc4 => call_if!(!r.f.z.get()),                             // call_nz_n
         0xc5 => push!(bc),                                          // push_bc
@@ -548,7 +549,8 @@ pub fn exec(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xe3 => xx(),                                               // xx
         0xe4 => xx(),                                               // xx
         0xe5 => push!(hl),                                          // push_hl
-        0xe6 => {and_a!(m.rb(r.bump())); warn!("and a:{:02X}",r.a); 2 }                       // and_an
+        0xe6 => and_a!(m.rb(r.bump())),                             // and_an
+        //0xe6 => {and_a!(m.rb(r.bump())); warn!("and a:{:02X}",r.a); 2 }                       // and_an
         0xe7 => rst!(0x20),                                         // rst_20
         0xe8 => { add_spn(r, m); 4 }                                // add_spn
         0xe9 => { r.pc = r.hl(); 1 }                                // jp_hl
@@ -650,10 +652,15 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         $s;
         m.wb(r.hl(), $i);
     }) );
-    macro_rules! hlfrob( ($i:ident, $e:expr) => ({
-        let $i = m.rb(r.hl());
-        r.f.h.unset(); r.f.n.unset();
-        m.wb(r.hl(), $e);
+    macro_rules! hlfrob( ($e:expr) => ({
+        let hl = m.rb(r.hl());
+        //r.f.h.unset(); r.f.n.unset();
+        m.wb(r.hl(), hl & $e);
+    }) );
+    macro_rules! hlfrob_or( ($e:expr) => ({
+        let hl = m.rb(r.hl());
+        //r.f.h.unset(); r.f.n.unset();
+        m.wb(r.hl(), hl | $e);
     }) );
     macro_rules! sra( ($e:expr, $cy:expr) => ({
         let co = $e & 1;
@@ -701,7 +708,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x03 => rlc!(r.e, 2),                                       // rlc_e
         0x04 => rlc!(r.h, 2),                                       // rlc_h
         0x05 => rlc!(r.l, 2),                                       // rlc_l
-        0x06 => { hlm!(hl, rlc!(hl, 1)); 4 }                        // rlc_hlm
+        0x06 => { hlm!(hl, rlc!(hl, 1)); 4 }                                 // rlc_hlm
         0x07 => rlc!(r.a, 2),                                       // rlc_a
         0x08 => rrc!(r.b, 2),                                       // rrc_b
         0x09 => rrc!(r.c, 2),                                       // rrc_c
@@ -709,7 +716,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x0b => rrc!(r.e, 2),                                       // rrc_e
         0x0c => rrc!(r.h, 2),                                       // rrc_h
         0x0d => rrc!(r.l, 2),                                       // rrc_l
-        0x0e => { hlm!(hl, rrc!(hl, 1)); 4 }                        // rrc_hlm
+        0x0e => { hlm!(hl, rrc!(hl, 1)); 4 }                                 // rrc_hlm
         0x0f => rrc!(r.a, 2),                                       // rrc_a
 
         0x10 => rl!(r.b, 2),                                        // rl_b
@@ -718,7 +725,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x13 => rl!(r.e, 2),                                        // rl_e
         0x14 => rl!(r.h, 2),                                        // rl_h
         0x15 => rl!(r.l, 2),                                        // rl_l
-        0x16 => { hlm!(hl, rl!(hl, 1)); 4 }                         // rl_hlm
+        0x16 => { hlm!(hl, rl!(hl, 1)); 4 }                                  // rl_hlm
         0x17 => rl!(r.a, 2),                                        // rl_a
         0x18 => rr!(r.b, 2),                                        // rr_b
         0x19 => rr!(r.c, 2),                                        // rr_c
@@ -726,7 +733,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x1b => rr!(r.e, 2),                                        // rr_e
         0x1c => rr!(r.h, 2),                                        // rr_h
         0x1d => rr!(r.l, 2),                                        // rr_l
-        0x1e => { hlm!(hl, rr!(hl, 1)); 4 }                         // rr_hlm
+        0x1e => { hlm!(hl, rr!(hl, 1)); 4 }                                  // rr_hlm
         0x1f => rr!(r.a, 2),                                        // rr_a
 
         0x20 => sla!(r.b, 2),                                       // sla_b
@@ -735,7 +742,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x23 => sla!(r.e, 2),                                       // sla_e
         0x24 => sla!(r.h, 2),                                       // sla_h
         0x25 => sla!(r.l, 2),                                       // sla_l
-        0x26 => { hlm!(hl, sla!(hl, 1)); 4 }                        // sla_hlm
+        0x26 => { hlm!(hl, sla!(hl, 1)); 4 }                                 // sla_hlm
         0x27 => sla!(r.a, 2),                                       // sla_a
         0x28 => sra!(r.b, 2),                                       // sra_b
         0x29 => sra!(r.c, 2),                                       // sra_c
@@ -743,7 +750,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x2b => sra!(r.e, 2),                                       // sra_e
         0x2c => sra!(r.h, 2),                                       // sra_h
         0x2d => sra!(r.l, 2),                                       // sra_l
-        0x2e => { hlm!(hl, sra!(hl, 1)); 4 }                        // sra_hlm
+        0x2e => { hlm!(hl, sra!(hl, 1)); 4 }                                 // sra_hlm
         0x2f => sra!(r.a, 2),                                       // sra_a
 
         0x30 => swap!(r.b),                                         // swap_b
@@ -752,7 +759,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x33 => swap!(r.e),                                         // swap_e
         0x34 => swap!(r.h),                                         // swap_h
         0x35 => swap!(r.l),                                         // swap_l
-        0x36 => { hlm!(hl, swap!(hl)); 4 }                          // swap_hlm
+        0x36 => { hlm!(hl, swap!(hl)); 4 }                                   // swap_hlm
         0x37 => swap!(r.a),                                         // swap_a
         0x38 => srl!(r.b, 2),                                       // srl_b
         0x39 => srl!(r.c, 2),                                       // srl_c
@@ -760,7 +767,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x3b => srl!(r.e, 2),                                       // srl_e
         0x3c => srl!(r.h, 2),                                       // srl_h
         0x3d => srl!(r.l, 2),                                       // srl_l
-        0x3e => { hlm!(hl, srl!(hl, 1)); 4 }                        // srl_hlm
+        0x3e => { hlm!(hl, srl!(hl, 1)); 4 }                                 // srl_hlm
         0x3f => srl!(r.a, 2),                                       // srl_a
 
         0x40 => bit!(r.b, 0),                                       // bit_0b
@@ -837,7 +844,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x83 => { r.e &= !(1 << 0); 2 }                             // res_0e
         0x84 => { r.h &= !(1 << 0); 2 }                             // res_0h
         0x85 => { r.l &= !(1 << 0); 2 }                             // res_0l
-        0x86 => { hlfrob!(hl, hl & !(1 << 0)); 4 }                  // set_0hlm
+        0x86 => { hlfrob!(!(1 << 0)); 4 }                           // set_0hlm
         0x87 => { r.a &= !(1 << 0); 2 }                             // res_0a
         0x88 => { r.b &= !(1 << 1); 2 }                             // res_1b
         0x89 => { r.c &= !(1 << 1); 2 }                             // res_1c
@@ -845,7 +852,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x8b => { r.e &= !(1 << 1); 2 }                             // res_1e
         0x8c => { r.h &= !(1 << 1); 2 }                             // res_1h
         0x8d => { r.l &= !(1 << 1); 2 }                             // res_1l
-        0x8e => { hlfrob!(hl, hl & !(1 << 1)); 4 }                  // set_1hlm
+        0x8e => { hlfrob!(!(1 << 1)); 4 }                           // set_1hlm
         0x8f => { r.a &= !(1 << 1); 2 }                             // res_1a
 
         0x90 => { r.b &= !(1 << 2); 2 }                             // res_2b
@@ -854,7 +861,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x93 => { r.e &= !(1 << 2); 2 }                             // res_2e
         0x94 => { r.h &= !(1 << 2); 2 }                             // res_2h
         0x95 => { r.l &= !(1 << 2); 2 }                             // res_2l
-        0x96 => { hlfrob!(hl, hl & !(1 << 2)); 4 }                  // set_2hlm
+        0x96 => { hlfrob!(!(1 << 2)); 4 }                           // set_2hlm
         0x97 => { r.a &= !(1 << 2); 2 }                             // res_2a
         0x98 => { r.b &= !(1 << 3); 2 }                             // res_3b
         0x99 => { r.c &= !(1 << 3); 2 }                             // res_3c
@@ -862,7 +869,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0x9b => { r.e &= !(1 << 3); 2 }                             // res_3e
         0x9c => { r.h &= !(1 << 3); 2 }                             // res_3h
         0x9d => { r.l &= !(1 << 3); 2 }                             // res_3l
-        0x9e => { hlfrob!(hl, hl & !(1 << 3)); 4 }                  // set_3hlm
+        0x9e => { hlfrob!(!(1 << 3)); 4 }                           // set_3hlm
         0x9f => { r.a &= !(1 << 3); 2 }                             // res_3a
 
         0xa0 => { r.b &= !(1 << 4); 2 }                             // res_4b
@@ -871,7 +878,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xa3 => { r.e &= !(1 << 4); 2 }                             // res_4e
         0xa4 => { r.h &= !(1 << 4); 2 }                             // res_4h
         0xa5 => { r.l &= !(1 << 4); 2 }                             // res_4l
-        0xa6 => { hlfrob!(hl, hl & !(1 << 4)); 4 }                  // set_4hlm
+        0xa6 => { hlfrob!(!(1 << 4)); 4 }                           // set_4hlm
         0xa7 => { r.a &= !(1 << 4); 2 }                             // res_4a
         0xa8 => { r.b &= !(1 << 5); 2 }                             // res_5b
         0xa9 => { r.c &= !(1 << 5); 2 }                             // res_5c
@@ -879,7 +886,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xab => { r.e &= !(1 << 5); 2 }                             // res_5e
         0xac => { r.h &= !(1 << 5); 2 }                             // res_5h
         0xad => { r.l &= !(1 << 5); 2 }                             // res_5l
-        0xae => { hlfrob!(hl, hl & !(1 << 5)); 4 }                  // set_5hlm
+        0xae => { hlfrob!(!(1 << 5)); 4 }                           // set_5hlm
         0xaf => { r.a &= !(1 << 5); 2 }                             // res_5a
 
         0xb0 => { r.b &= !(1 << 6); 2 }                             // res_6b
@@ -888,7 +895,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xb3 => { r.e &= !(1 << 6); 2 }                             // res_6e
         0xb4 => { r.h &= !(1 << 6); 2 }                             // res_6h
         0xb5 => { r.l &= !(1 << 6); 2 }                             // res_6l
-        0xb6 => { hlfrob!(hl, hl & !(1 << 6)); 4 }                  // set_6hlm
+        0xb6 => { hlfrob!(!(1 << 6)); 4 }                           // set_6hlm
         0xb7 => { r.a &= !(1 << 6); 2 }                             // res_6a
         0xb8 => { r.b &= !(1 << 7); 2 }                             // res_7b
         0xb9 => { r.c &= !(1 << 7); 2 }                             // res_7c
@@ -896,7 +903,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xbb => { r.e &= !(1 << 7); 2 }                             // res_7e
         0xbc => { r.h &= !(1 << 7); 2 }                             // res_7h
         0xbd => { r.l &= !(1 << 7); 2 }                             // res_7l
-        0xbe => { hlfrob!(hl, hl & !(1 << 7)); 4 }                  // set_7hlm
+        0xbe => { hlfrob!(!(1 << 7)); 4 }                           // set_7hlm
         0xbf => { r.a &= !(1 << 7); 2 }                             // res_7a
 
         0xc0 => { r.b |= (1 << 0); 2 }                              // set_0b
@@ -905,7 +912,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xc3 => { r.e |= (1 << 0); 2 }                              // set_0e
         0xc4 => { r.h |= (1 << 0); 2 }                              // set_0h
         0xc5 => { r.l |= (1 << 0); 2 }                              // set_0l
-        0xc6 => { hlfrob!(hl, hl | (1 << 0)); 4 }                   // set_0hlm
+        0xc6 => { hlfrob_or!((1 << 0)); 4 }                         // set_0hlm
         0xc7 => { r.a |= (1 << 0); 2 }                              // set_0a
         0xc8 => { r.b |= (1 << 1); 2 }                              // set_1b
         0xc9 => { r.c |= (1 << 1); 2 }                              // set_1c
@@ -913,7 +920,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xcb => { r.e |= (1 << 1); 2 }                              // set_1e
         0xcc => { r.h |= (1 << 1); 2 }                              // set_1h
         0xcd => { r.l |= (1 << 1); 2 }                              // set_1l
-        0xce => { hlfrob!(hl, hl | (1 << 1)); 4 }                   // set_1hlm
+        0xce => { hlfrob_or!((1 << 1)); 4 }                         // set_1hlm
         0xcf => { r.a |= (1 << 1); 2 }                              // set_1a
 
         0xd0 => { r.b |= (1 << 2); 2 }                              // set_2b
@@ -922,7 +929,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xd3 => { r.e |= (1 << 2); 2 }                              // set_2e
         0xd4 => { r.h |= (1 << 2); 2 }                              // set_2h
         0xd5 => { r.l |= (1 << 2); 2 }                              // set_2l
-        0xd6 => { hlfrob!(hl, hl | (1 << 2)); 4 }                   // set_2hlm
+        0xd6 => { hlfrob_or!((1 << 2)); 4 }                         // set_2hlm
         0xd7 => { r.a |= (1 << 2); 2 }                              // set_2a
         0xd8 => { r.b |= (1 << 3); 2 }                              // set_3b
         0xd9 => { r.c |= (1 << 3); 2 }                              // set_3c
@@ -930,7 +937,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xdb => { r.e |= (1 << 3); 2 }                              // set_3e
         0xdc => { r.h |= (1 << 3); 2 }                              // set_3h
         0xdd => { r.l |= (1 << 3); 2 }                              // set_3l
-        0xde => { hlfrob!(hl, hl | (1 << 3)); 4 }                   // set_3hlm
+        0xde => { hlfrob_or!((1 << 3)); 4 }                         // set_3hlm
         0xdf => { r.a |= (1 << 3); 2 }                              // set_3a
 
         0xe0 => { r.b |= (1 << 4); 2 }                              // set_4b
@@ -939,7 +946,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xe3 => { r.e |= (1 << 4); 2 }                              // set_4e
         0xe4 => { r.h |= (1 << 4); 2 }                              // set_4h
         0xe5 => { r.l |= (1 << 4); 2 }                              // set_4l
-        0xe6 => { hlfrob!(hl, hl | (1 << 4)); 4 }                   // set_4hlm
+        0xe6 => { hlfrob_or!((1 << 4)); 4 }                         // set_4hlm
         0xe7 => { r.a |= (1 << 4); 2 }                              // set_4a
         0xe8 => { r.b |= (1 << 5); 2 }                              // set_5b
         0xe9 => { r.c |= (1 << 5); 2 }                              // set_5c
@@ -947,7 +954,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xeb => { r.e |= (1 << 5); 2 }                              // set_5e
         0xec => { r.h |= (1 << 5); 2 }                              // set_5h
         0xed => { r.l |= (1 << 5); 2 }                              // set_5l
-        0xee => { hlfrob!(hl, hl | (1 << 5)); 4 }                   // set_5hlm
+        0xee => { hlfrob_or!((1 << 5)); 4 }                         // set_5hlm
         0xef => { r.a |= (1 << 5); 2 }                              // set_5a
 
         0xf0 => { r.b |= (1 << 6); 2 }                              // set_6b
@@ -956,7 +963,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xf3 => { r.e |= (1 << 6); 2 }                              // set_6e
         0xf4 => { r.h |= (1 << 6); 2 }                              // set_6h
         0xf5 => { r.l |= (1 << 6); 2 }                              // set_6l
-        0xf6 => { hlfrob!(hl, hl | (1 << 6)); 4 }                   // set_6hlm
+        0xf6 => { hlfrob_or!((1 << 6)); 4 }                         // set_6hlm
         0xf7 => { r.a |= (1 << 6); 2 }                              // set_6a
         0xf8 => { r.b |= (1 << 7); 2 }                              // set_7b
         0xf9 => { r.c |= (1 << 7); 2 }                              // set_7c
@@ -964,7 +971,7 @@ pub fn exec_cb(inst: u8, r: &mut Registers, m: &mut mmu::Memory) -> u32 {
         0xfb => { r.e |= (1 << 7); 2 }                              // set_7e
         0xfc => { r.h |= (1 << 7); 2 }                              // set_7h
         0xfd => { r.l |= (1 << 7); 2 }                              // set_7l
-        0xfe => { hlfrob!(hl, hl | (1 << 7)); 4 }                   // set_7hlm
+        0xfe => { hlfrob_or!((1 << 7)); 4 }                         // set_7hlm
         0xff => { r.a |= (1 << 7); 2 }                              // set_7a
 
         _ => 0
