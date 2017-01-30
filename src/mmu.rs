@@ -68,7 +68,7 @@ impl Memory {
     // This is all the system's RAM
     pub fn new<W: Window>(window: &PistonWindow<W>) -> Memory {
         let mut mem = Memory {
-            if_: 0u8,
+            if_: 1u8,
             ie_: 0u8,
             raw_mem: Box::new([0u8; MEM_SIZE]),
             rom_loaded: Vec::new(),
@@ -130,7 +130,7 @@ impl Memory {
         self.wb(0xff24, 0x77); // NR50
         self.wb(0xff25, 0xf3); // NR51
         self.wb(0xff26, 0xf1); // NR52
-        self.wb(0xff40, 0xb1); // LCDC
+        self.wb(0xff40, 0x91); // LCDC
         self.wb(0xff42, 0x00); // SCY
         self.wb(0xff43, 0x00); // SCX
         self.wb(0xff44, 0x00); // LY
@@ -332,15 +332,15 @@ impl Memory {
                     0x0 => {
                         warn!("Input requested (unimplemented) in address {:04X}", addr);
                         // Return no buttons pressed for now
-                        self.read_byte_raw(addr) & 0b00110000
+                        0xFF // self.read_byte_raw(addr) & 0b00110000
                     },
-                    0x4 => self.timer.div,
+                    0x4 => (self.timer.div >> 8) as u8,
                     0x5 => self.timer.tima,
                     0x6 => self.timer.tma,
-                    0x7 => self.timer.tac,
+                    0x7 => (self.timer.tac | 0xF8),
                     0xf => 0xE0 | self.if_,
 
-                    _ => self.read_byte_raw(addr),
+                    _ => 0xFF//self.read_byte_raw(addr),
                 }
             }
             // Video I/O Registers (0xFF4x)
@@ -350,10 +350,10 @@ impl Memory {
                         //debug!("gpu_rb {:x}", addr);
                         self.gpu.rb(addr)
                     },
-                    _ => self.read_byte_raw(addr),
+                    _ => 0xFF//self.read_byte_raw(addr),
                 }
             }
-            _ => self.read_byte_raw(addr),
+            _ => 0xFF//self.read_byte_raw(addr),
         }
     }
 
@@ -382,11 +382,12 @@ impl Memory {
 
                         file.write(&[data]).unwrap();
                     }
+                    0x2 => {/* Serial transfer start */}
                     0x4 => { self.timer.div = 0; }
                     0x5 => { self.timer.tima = data; }
                     0x6 => { self.timer.tma = data; }
                     0x7 => {
-                        self.timer.tac = data;
+                        self.timer.tac = data & 0b111;
                         self.timer.update();
                     }
                     0xf => { self.if_ = data; }
