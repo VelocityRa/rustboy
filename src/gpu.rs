@@ -596,17 +596,6 @@ impl Gpu {
     }
 }
 
-pub fn start_dma_transfer(mem: &mut Memory, val: u8) {
-    debug!("OAM DMA tranfer from 0x{:02X}00", val);
-
-    if val > 0xF1 { error!("Invalid OAM DMA address"); return; }
-
-    let high_byte = (val as u16) << 8;
-
-    for i in 0..OAM_SIZE {
-        mem.gpu.oam[i as usize] = mem.rb(high_byte | i as u16);
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum Mode {

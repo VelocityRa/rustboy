@@ -313,6 +313,11 @@ impl Cpu {
             trace_file.write_all(line.as_bytes()).unwrap();
         }
 
+        // OAM DMA
+        if mem.is_dma {
+            mem.handle_dma_transfer();
+        }
+
         // HALT
         if self.regs.halt {
             if mem.ie_ & mem.if_ != 0 {
@@ -455,6 +460,7 @@ impl fmt::Debug for Flags {
         )
     }
 }
+
 
 //  ======================================
 //  |               TESTS                |

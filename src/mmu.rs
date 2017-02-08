@@ -61,6 +61,11 @@ pub struct Memory {
     rom_offset: u16,
     ram_bank: u8,
     ram_offset: u16,
+
+    // OAM DMA stuff
+    pub is_dma: bool,
+    dma_left: usize,
+    dma_value: u8,
 }
 
 impl Memory {
@@ -84,6 +89,10 @@ impl Memory {
             rom_offset: 0x4000,
             ram_bank: 0,
             ram_offset: 0x0000,
+
+            is_dma: false,
+            dma_left: 0,
+            dma_value: 0,
         };
         mem.power_on();
         mem.timer.reset_bios_skip();
@@ -408,7 +417,10 @@ impl Memory {
                     // Write to LY normally resets it, but it leads
                     // to challenging timings so just do nothing
                     4 => {},
-                    6 => gpu::start_dma_transfer(self, data),
+                    6 => {
+                            self.start_dma_transfer(data);
+                            self.timer.step(4, &mut self.if_);
+                        }
                     _ => self.write_byte_raw(addr, data)
                 }
             }
@@ -468,6 +480,37 @@ impl Memory {
             0xFFFF => "Interrupt Enable Register",
             _ => unreachable!(),
         })
+    }
+
+
+    pub fn start_dma_transfer(&mut self, val: u8) {
+
+        debug!("OAM DMA tranfer from 0x{:02X}00", val);
+
+        if val > 0xF1 { error!("Invalid OAM DMA address"); return; }
+
+        self.is_dma = true;
+        self.dma_left = gpu::OAM_SIZE;
+        self.dma_value = val;
+
+        self.timer.step(4, &mut self.if_);
+    }
+
+    pub fn handle_dma_transfer(&mut self) {
+        self.dma_left -= 1;
+        if self.dma_left == 0 {
+            self.is_dma = false;
+        }
+        // TODO: OPTIMIZE (compute above)
+        let high_byte = (self.dma_value as u16) << 8;
+        let low_byte = gpu::OAM_SIZE - self.dma_left -1;
+
+        self.gpu.oam[low_byte] = self.rb(high_byte | low_byte as u16 );
+
+        self.timer.step(4, &mut self.if_);
+
+        // println!("{:04X} becomes {:02X}",
+        // high_byte | low_byte as u16, self.rb(high_byte | low_byte as u16));
     }
 }
 
