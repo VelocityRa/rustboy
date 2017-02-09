@@ -4,52 +4,61 @@
 #[allow(dead_code)]
 
 use cpu::Interrupt;
-use mmu::Memory;
 
 use piston::input;
 use piston_window::*;
 use graphics::types::SourceRectangle;
 
-const VRAM_SIZE: usize = 8 << 10; // 8K
-pub const OAM_SIZE: usize = 0x9F;     // 0xfe00 - 0xfe9f is OAM
-const CGB_BP_SIZE: usize = 64;    // 64 bytes of extra memory
-const NUM_TILES: usize = 192;     // number of in-memory tiles
+const VRAM_SIZE: usize = 0x2000;
+pub const OAM_SIZE: usize = 0x9F;   // 0xfe00 - 0xfe9f is OAM
+const CGB_BP_SIZE: usize = 64;      // 64 bytes of extra memory
+const NUM_TILES: usize = 192;       // number of in-memory tiles
 
 pub const HEIGHT: usize = 144;
 pub const WIDTH: usize = 160;
 
 pub type Color = [u8; 4];
+pub type Palette = Palette;
 
-const PIXEL_COLOR: Color = [40, 88, 200, 255];
+struct Palettes {
+    bg: Palette,
+    obp0: Palette,
+    obp1: Palette,
+}
 
-const PALETTE_BW: [Color; 4] = [
+const PALETTE_BW: Palette = [
     [255, 255, 255, 255],
     [148, 148, 148, 255],
     [ 86,  86,  86, 255],
     [  0,   0,   0, 255],
 ];
-
-const PALETTE_GREEN: [Color; 4] = [
+const PALETTE_GREEN: Palette = [
     [225, 247, 207, 255],
     [136, 193, 107, 255],
     [ 49,  106, 74, 255],
     [ 7,  24, 31, 255],
 ];
-
-const PALETTE_PUKE_GREEN: [Color; 4] = [
+const PALETTE_PUKE_GREEN: Palette = [
     [157, 188, 7, 255],
     [122, 156, 107, 255],
     [ 53,  99, 56, 255],
     [ 13,  58, 8, 255],
 ];
-
 // TODO: Switch palettes at runtome
-const PALETTE: &'static [Color; 4] = &PALETTE_GREEN;
+const PALETTE: &'static Palette = &PALETTE_GREEN;
 
 struct Tiles {
     data: [[[u8; 8]; 8]; NUM_TILES],
     need_update: bool,
     to_update: [bool; NUM_TILES],
+}
+
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+enum Mode {
+    HBlank = 0x00, // mode 0
+    VBlank = 0x01, // mode 1
+    RdOam  = 0x02, // mode 2
+    RdVram = 0x03, // mode 3
 }
 
 pub struct Gpu {
@@ -63,7 +72,7 @@ pub struct Gpu {
     d: u32,
     mode: Mode,
 
-    clock: u32,
+    pub clock: u32,
 
     pub vrambank: Box<[u8; VRAM_SIZE]>,
 
@@ -126,7 +135,7 @@ pub struct Gpu {
     // Compiled palettes. These are updated when writing to BGP/OBP0/OBP1. Meant
     // for non CGB use only. Each palette is an array of 4 color schemes. Each
     // color scheme is one in PALETTE.
-    pal: Box<Palette>,
+    pal: Box<Palettes>,
 
     // Compiled tiles
     tiles: Box<Tiles>,
@@ -237,6 +246,7 @@ impl Gpu {
 
         // self.clock += 1;
     }
+
     pub fn rb_vram(&self, addr: u16) -> u8 {
         match addr {
             0x8000 ... 0x9FFF => self.vrambank[addr as usize - 0x8000],
@@ -255,7 +265,7 @@ impl Gpu {
             //    //trace!("writing to VRAM2 {:04X}  data {:02X}", addr - 0xA000 , data);
             //    self.vrambanks[1][addr as usize - 0xA000] = data;
             // }
-            _ => { unreachable!(); }
+            _ => unreachable!()
         }
     }
 
@@ -597,23 +607,12 @@ impl Gpu {
 }
 
 
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
-enum Mode {
-    HBlank = 0x00, // mode 0
-    VBlank = 0x01, // mode 1
-    RdOam  = 0x02, // mode 2
-    RdVram = 0x03, // mode 3
-}
 
-struct Palette {
-    bg: [Color; 4],
-    obp0: [Color; 4],
-    obp1: [Color; 4],
 }
 
 // Update the cached palettes for BG/OBP0/OBP1. This should be called whenever
 // these registers are modified
-fn update_pal(pal: &mut [Color; 4], val: u8) {
+fn update_pal(pal: &mut Palette, val: u8) {
     // These registers are indices into the actual palette. See
     // http://problemkaputt.de/pandocs.htm#lcdmonochromepalettes
     pal[0] = PALETTE[((val >> 0) & 0x3) as usize];
