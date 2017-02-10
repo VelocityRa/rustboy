@@ -148,6 +148,11 @@ fn main() {
             emu.toggle_debugging();
         }
 
+        // D to enable/disable debugging text
+        if let Some(Button::Keyboard(Key::T)) = evt.press_args() {
+            emu.mem.gpu.dump_tiles();
+        }
+
         if let Event::Render(_) = evt {
             //println!("RENDER: {}", emu.frame_count);
             // Draw BG

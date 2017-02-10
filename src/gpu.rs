@@ -18,7 +18,7 @@ pub const HEIGHT: usize = 144;
 pub const WIDTH: usize = 160;
 
 pub type Color = [u8; 4];
-pub type Palette = Palette;
+pub type Palette = [Color; 4];
 
 struct Palettes {
     bg: Palette,
@@ -166,7 +166,7 @@ impl Gpu {
             tiledata: false,
             winon: false, winmap: false, lcdon: false,
 
-            pal: Box::new(Palette {
+            pal: Box::new(Palettes {
                 bg: [[0; 4]; 4],
                 obp0: [[0; 4]; 4],
                 obp1: [[0; 4]; 4],
@@ -606,8 +606,35 @@ impl Gpu {
     }
 }
 
+    pub fn dump_tiles(&self) {
+        use image::{ImageBuffer, RgbaImage, Rgba};
 
+        static TILE_SIZE_X: u32 = 16 * 8;
+        static TILE_SIZE_Y: u32 = 8 * 8;
 
+        let mut img: RgbaImage = ImageBuffer::new(TILE_SIZE_X, TILE_SIZE_Y);
+
+        for x in 0..(16 * 8) {
+            for y in 0..(8 * 8) {
+                let tilei_x = x / 8;
+                let tilei_y = y / 8;
+                let tilei = tilei_x + 16 * tilei_y;
+
+                let tile = self.tiles.data[tilei];
+
+                let colori = tile[y % 8][x % 8];
+
+                let r = PALETTE[colori as usize][0];
+                let g = PALETTE[colori as usize][1];
+                let b = PALETTE[colori as usize][2];
+
+                img.put_pixel(x as u32, y as u32, Rgba { data: [r, g, b, 255]})
+            }
+        }
+
+        img.save("tile_dump.png").unwrap();
+        info!("Tiles dumped to tile_dump.png");
+    }
 }
 
 // Update the cached palettes for BG/OBP0/OBP1. This should be called whenever
