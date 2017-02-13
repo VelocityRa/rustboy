@@ -221,13 +221,22 @@ impl Gpu {
         // });
     }
 
-    fn set_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8, ) {
+    #[inline]
+    fn set_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
         let first_byte = 4 * (x + (y * 160)) as usize;
 
         self.image_data[first_byte] = r;      // R
         self.image_data[first_byte+1] = g;    // G
         self.image_data[first_byte+2] = b;    // B
         self.image_data[first_byte+3] = 255;  // A
+    }
+
+    #[inline]
+    fn set_pixel_index(&mut self, first_byte: usize, colori: usize, pal: &Palette) {
+        self.image_data[first_byte] = pal[colori][0];    // R
+        self.image_data[first_byte+1] = pal[colori][1];  // G
+        self.image_data[first_byte+2] = pal[colori][2];  // B
+        self.image_data[first_byte+3] = pal[colori][0];  // A
     }
 
     pub fn update(&mut self) {
@@ -294,7 +303,7 @@ impl Gpu {
 
             0x42 => self.scy,
             0x43 => self.scx,
-            0x44 => 0,//self.ly,
+            0x44 => self.ly,
             0x45 => self.lyc,
             // 0x46 is DMA transfer, can't read
             0x47 => self.bgp,
@@ -515,7 +524,7 @@ impl Gpu {
         // because each tile is 8 pixels high. We then multiply by 32
         // because each row is 32 bytes long. We can't just multiply by 4
         // because we need the truncation to happen beforehand
-        let mapbase = mapbase + ((line % 256) >> 3) * 32;
+        let mapbase = mapbase + (((line % 256) >> 3) << 5);
 
         // X and Y location inside the tile itself to paint
         let y = (self.ly.wrapping_add(self.scy)) % 8;
@@ -529,18 +538,12 @@ impl Gpu {
         // (&tiles[0]) == 0x9000, where if tiledata = 1, (&tiles[0]) = 0x8000.
         // This implies that the indices are treated as signed numbers.
         let mut i = 0;
-        let tilebase = 0; //if !self.tiledata {256} else {0};
+        let tilebase = if !self.tiledata {256} else {0};
 
-        // TODO: Move elsewhere
-        if self.is_cgb {
-            panic!("CGB NOT SUPPORTED");
-        }
+        //info!("render background. mapbase:{:x} scx:{} scy:{}", mapbase, self.scx, self.scy);
 
-        trace!("render background. mapbase:{:x} scx:{} scy:{}", mapbase, self.scx, self.scy);
-
-        if self.d % 10000 == 0 {self.c += 1}         // HACKHACK
-        self.d+=1;
-
+        // let mut bg_tiles = [0u8; 20];
+        // let mut loop_c: usize = 0;
         loop {
             // Backgrounds wrap around, so calculate the offset into the bgmap
             // each loop to check for wrapping
@@ -561,25 +564,16 @@ impl Gpu {
             hflip = false;
             bgp = self.pal.bg;
 
-            if row.iter().any(|&x| x != 0) {
-                println!("row: {:?}", row);
-            }
+            // if row.iter().any(|&x| x != 0) {
+            //     println!("row: {:?}", row);
+            // }
 
             while x < 8 && i < WIDTH as u8 {
                 let colori = row[if hflip {7 - x} else {x} as usize];
-                let color = bgp[colori as usize];
-                //print!("{} ", colori);
                 // To indicate bg priority, list a color >= 4
                 scanline[i as usize] = if bgpri {4} else {colori};
 
-                //self.set_pixel(x as usize, y as usize, color[0], color[1], color[2]);
-
-                let first_byte = coff; // 4 * (x + (y * 160)) as usize;
-
-                self.image_data[first_byte] = color[0];    // R
-                self.image_data[first_byte+1] = color[1];  // G
-                self.image_data[first_byte+2] = color[2];  // B
-                self.image_data[first_byte+3] = color[3];  // A
+                self.set_pixel_index(coff, colori as usize, &bgp);
 
                 x += 1;
                 i += 1;
@@ -593,8 +587,12 @@ impl Gpu {
             //println!("x {:?} y {:?}", x, y);
 
             x = 0;
+            // loop_c += 1;
             if i >= WIDTH as u8 { break }
         }
+
+        // Dump bg tiles
+        // println!("LINE: {:03} | LY: {:03} | {:?}", line, self.ly, bg_tiles);
     }
 
     fn render_window(&mut self) {
