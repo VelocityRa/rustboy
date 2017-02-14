@@ -268,6 +268,22 @@ impl Gpu {
         match addr {
             0x8000 ... 0x9FFF => {
                 //trace!("writing to VRAM1 {:04X}  data {:02X}", addr - 0x8000, data);
+                let mut tilei: u16;
+
+                tilei = (addr - 0x8000 as u16) / 16;
+
+                if tilei < NUM_TILES as u16 {
+                    self.tiles.to_update[tilei as usize] = true;
+                    self.tiles.need_update = true;
+                }
+
+                if !self.tiledata && addr >= 0x8800 {
+                    tilei = (addr - 0x8800 as u16) / 16;
+                    if tilei < NUM_TILES as u16 {
+                        self.tiles.to_update[tilei as usize] = true;
+                        self.tiles.need_update = true;
+                    }
+                }
                 self.vrambank[addr as usize - 0x8000] = data;
             },
             // 0xA000 ... 0xBFFF => {
@@ -448,8 +464,11 @@ impl Gpu {
             //      byte 1 : 01101010
             //
             // The colors are [0, 2, 2, 1, 3, 0, 3, 1]
+            // println!("-- memory addr: {:#0X}   {:#0X}", ((i % NUM_TILES) * 16) + 0x8000, self.vrambank[((i % NUM_TILES) * 16)]);
             for j in 0..8 {
                 let addr = ((i % NUM_TILES) * 16) + j * 2;
+
+                // println!("memory addr: {:#0X}", addr + 0x8000);
                 // All tiles are located 0x8000-0x97ff => 0x0000-0x17ff in VRAM
                 // meaning that the index is simply an index into raw VRAM
                 let (mut lsb, mut msb) = if i < NUM_TILES {
@@ -462,6 +481,7 @@ impl Gpu {
                 // LSB is the right-most pixel.
                 for k in (0..8).rev() {
                     tiles.data[i][j][k] = ((msb & 1) << 1) | (lsb & 1);
+                    // println!("lsb {:#08b} msb {:#08b} tiledata {:#02X}", lsb, msb, tiles.data[i][j][k]);
                     lsb >>= 1;
                     msb >>= 1;
                 }
@@ -512,11 +532,6 @@ impl Gpu {
     }
 
     fn render_background(&mut self, scanline: &mut [u8; WIDTH]) {
-        //self.update_tileset();
-        // for i in 0..(VRAM_SIZE-1) {
-        //    let b = self.vrambank[i];
-        //    if b != 0 { print!("{:04X} ", i) }
-        // }
         let mapbase = self.bgbase();
         let line = self.ly as usize + self.scy as usize;
 
@@ -533,11 +548,12 @@ impl Gpu {
         // Offset into the canvas to draw. line * width * 4 colors
         let mut coff = (self.ly as usize) * WIDTH * 4;
 
+        let mut i = 0;
         // this.tiledata is a flag to determine which tile data table to use
         // 0=8800-97FF, 1=8000-8FFF. For some odd reason, if tiledata = 0, then
         // (&tiles[0]) == 0x9000, where if tiledata = 1, (&tiles[0]) = 0x8000.
         // This implies that the indices are treated as signed numbers.
-        let mut i = 0;
+        // TODO: should this be 0x800 ?
         let tilebase = if !self.tiledata {256} else {0};
 
         //info!("render background. mapbase:{:x} scx:{} scy:{}", mapbase, self.scx, self.scy);
@@ -548,28 +564,25 @@ impl Gpu {
             // Backgrounds wrap around, so calculate the offset into the bgmap
             // each loop to check for wrapping
             let mapoff = ((i as usize + self.scx as usize) % 256) >> 3;
-            let tilei = self.vrambank[mapbase + mapoff];
-
+            let mut tilei = self.vrambank[mapbase + mapoff];
+            // bg_tiles[loop_c] = tilei;
             // tiledata = 0 => tilei is a signed byte, so fix it here
             let tilebase = self.add_tilei(tilebase, tilei);
-            //println!("tilebase: {}", tilebase);
+            // println!("tilebase: {}", tilebase);
 
             let row;
             let bgpri;
             let hflip;
             let bgp;
 
-            row = self.tiles.data[tilei as usize ][y as usize];
+            row = self.tiles.data[tilebase as usize][y as usize];
             bgpri = false;
             hflip = false;
             bgp = self.pal.bg;
 
-            // if row.iter().any(|&x| x != 0) {
-            //     println!("row: {:?}", row);
-            // }
-
             while x < 8 && i < WIDTH as u8 {
                 let colori = row[if hflip {7 - x} else {x} as usize];
+
                 // To indicate bg priority, list a color >= 4
                 scanline[i as usize] = if bgpri {4} else {colori};
 
@@ -578,13 +591,7 @@ impl Gpu {
                 x += 1;
                 i += 1;
                 coff += 4;
-
-                //println!("color {:?}", color);
-                //println!("colori {:?}", colori);
             }
-
-            //println!("coff {:?}", coff);
-            //println!("x {:?} y {:?}", x, y);
 
             x = 0;
             // loop_c += 1;
@@ -602,18 +609,17 @@ impl Gpu {
     fn render_sprites(&mut self) {
 
     }
-}
 
     pub fn dump_tiles(&self) {
         use image::{ImageBuffer, RgbaImage, Rgba};
 
         static TILE_SIZE_X: u32 = 16 * 8;
-        static TILE_SIZE_Y: u32 = 8 * 8;
+        static TILE_SIZE_Y: u32 = 12 * 8;
 
         let mut img: RgbaImage = ImageBuffer::new(TILE_SIZE_X, TILE_SIZE_Y);
 
-        for x in 0..(16 * 8) {
-            for y in 0..(8 * 8) {
+        for y in 0..TILE_SIZE_Y as usize {
+            for x in 0..TILE_SIZE_X as usize {
                 let tilei_x = x / 8;
                 let tilei_y = y / 8;
                 let tilei = tilei_x + 16 * tilei_y;
