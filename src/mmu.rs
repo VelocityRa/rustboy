@@ -26,6 +26,7 @@ use piston_window::PistonWindow;
 use timer::Timer;
 use gpu::Gpu;
 use gpu;
+use input::Input;
 
 #[derive(PartialEq, Eq, Debug)]
 enum Mbc {
@@ -52,6 +53,7 @@ pub struct Memory {
 
     pub timer: Box<Timer>,
     pub gpu: Box<Gpu>,
+    pub input: Input,
 
     mbc: Mbc,
     cart_type: u8,
@@ -80,6 +82,7 @@ impl Memory {
 
             timer: Box::new(Timer::new()),
             gpu: Box::new(Gpu::new(window)),
+            input: Input::new(),
 
             mbc: Mbc::Unknown,
             cart_type: 0,
@@ -104,7 +107,7 @@ impl Memory {
     pub fn copy_vram(&mut self) {
         // TODO: Make faster?
         const VRAM_START: u16 = 0x8000;
-        const VRAM_SIZE: u16 = 8 << 10; // 8K;
+        const VRAM_SIZE: u16 = 0x2000;
         for addr in 0..VRAM_SIZE {
             self.gpu.vrambank[addr as usize] = self.rom_loaded[(addr + VRAM_START) as usize];
             //self.gpu.vrambanks[1][addr as usize] = self.rom_loaded[(addr + VRAM_EXT_START) as usize];
@@ -261,6 +264,7 @@ impl Memory {
             // Switch ROM bank
             0x2000 ... 0x3FFF => {
                 match self.mbc {
+                    Mbc::RomOnly => {}  // Ignore writes when no MBC (nothing to handle them)
                     Mbc::Mbc1 => {
                         let mut data_lower = data & 0x1F;
                         if data_lower == 0 { data_lower = 1 };
@@ -278,6 +282,7 @@ impl Memory {
             // Switch ROM bank "set" {1-31}-{97-127} and RAM bank
             0x4000 ... 0x5FFF => {
                 match self.mbc {
+                    Mbc::RomOnly => {},  // Ignore writes when no MBC (nothing to handle them)
                     Mbc::Mbc1 => {
                         if self.is_ram_mode {
                             // RAM mode: Set bank
@@ -337,19 +342,14 @@ impl Memory {
             0x0 => {
                 match addr & 0xF {
                     // TODO: Input
-                    //0x0 => self.input.rb(addr),
-                    0x0 => {
-                        warn!("Input requested (unimplemented) in address {:04X}", addr);
-                        // Return no buttons pressed for now
-                        0xFF // self.read_byte_raw(addr) & 0b00110000
-                    },
+                    0x0 => self.input.rb(),
                     0x4 => (self.timer.div >> 8) as u8,
                     0x5 => self.timer.tima,
                     0x6 => self.timer.tma,
                     0x7 => (self.timer.tac | 0xF8),
                     0xf => 0xE0 | self.if_,
 
-                    _ => 0xFF//self.read_byte_raw(addr),
+                    _ => 0xFF,
                 }
             }
             // Video I/O Registers (0xFF4x)
@@ -377,7 +377,7 @@ impl Memory {
             // I/O Ports (0xFF0x)
             0x0 => {
                 match addr & 0xF {
-                    0x0 => self.write_byte_raw(addr, data),
+                    0x0 => self.input.wb(data),
                     0x1 => {
                         info!("Serial data transfer in address {:04X}, data {}", addr, data as char);
 

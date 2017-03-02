@@ -40,6 +40,7 @@ mod mmu;
 mod cartridge;
 mod emulator;
 mod timer;
+mod input;
 
 const OPENGL: OpenGL = OpenGL::V3_2;
 static DEFAULT_LOG_LEVEL: &'static str = "debug";
@@ -102,7 +103,6 @@ fn main() {
         .resizable(false)
         .build()
         .unwrap();
-    window.set_max_fps(60);
     window.set_ups(60);
 
     // Initialize emulator
@@ -148,9 +148,18 @@ fn main() {
             emu.toggle_debugging();
         }
 
-        // D to enable/disable debugging text
+        // T to dump all tiles to a png
         if let Some(Button::Keyboard(Key::T)) = evt.press_args() {
             emu.mem.gpu.dump_tiles();
+        }
+
+        // If any other button was pressed, let emulator handle it
+        if let Some(Button::Keyboard(key)) = evt.press_args() {
+            emu.mem.input.key_press(&key);
+        }
+        // If any other button was released, let emulator handle it
+        if let Some(Button::Keyboard(key)) = evt.release_args() {
+            emu.mem.input.key_release(&key);
         }
 
         if let Event::Render(_) = evt {
