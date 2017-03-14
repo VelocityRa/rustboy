@@ -11,12 +11,14 @@ use graphics::types::SourceRectangle;
 
 const VRAM_SIZE: usize = 0x2000;
 pub const OAM_SIZE: usize = 0x9F;   // 0xfe00 - 0xfe9f is OAM
-const CGB_BP_SIZE: usize = 64;      // 64 bytes of extra memory
+const OAM_ENTRY_SIZE: usize = 4;
+const OBJ_COUNT: usize =  40;    // sprite count
 const NUM_TILES: usize = 192;       // number of in-memory tiles
 
 pub const HEIGHT: usize = 144;
 pub const WIDTH: usize = 160;
 
+pub type ScreenData = [u8; WIDTH * HEIGHT * 4];
 pub type Color = [u8; 4];
 pub type Palette = [Color; 4];
 
@@ -64,7 +66,7 @@ enum Mode {
 pub struct Gpu {
     pub oam: [u8; OAM_SIZE],
 
-    pub image_data: Box<[u8; WIDTH * HEIGHT * 4]>,
+    pub image_data: Box<ScreenData>,
 
     pub is_cgb: bool,
     pub is_sgb: bool,
@@ -219,24 +221,6 @@ impl Gpu {
         //         }
         //     }
         // });
-    }
-
-    #[inline]
-    fn set_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
-        let first_byte = 4 * (x + (y * 160)) as usize;
-
-        self.image_data[first_byte] = r;      // R
-        self.image_data[first_byte+1] = g;    // G
-        self.image_data[first_byte+2] = b;    // B
-        self.image_data[first_byte+3] = 255;  // A
-    }
-
-    #[inline]
-    fn set_pixel_index(&mut self, first_byte: usize, colori: usize, pal: &Palette) {
-        self.image_data[first_byte] = pal[colori][0];    // R
-        self.image_data[first_byte+1] = pal[colori][1];  // G
-        self.image_data[first_byte+2] = pal[colori][2];  // B
-        self.image_data[first_byte+3] = pal[colori][0];  // A
     }
 
     pub fn update(&mut self) {
@@ -517,7 +501,7 @@ impl Gpu {
             //self.render_window(&mut scanline);
         }
         if self.objon {
-            //self.render_sprites(&mut scanline);
+            self.render_sprites(&mut scanline);
         }
     }
 
@@ -526,8 +510,8 @@ impl Gpu {
         if self.tiledata {
             base + tilei as usize
         } else {
-            base + (tilei as isize + 128 as isize) as usize
-            //(base as isize + (tilei as i8 as isize)) as usize
+            //base + (tilei as isize + 128 as isize) as usize
+            (base as isize + (tilei as i8 as isize)) as usize
         }
     }
 
@@ -564,10 +548,10 @@ impl Gpu {
             // Backgrounds wrap around, so calculate the offset into the bgmap
             // each loop to check for wrapping
             let mapoff = ((i as usize + self.scx as usize) % 256) >> 3;
-            let mut tilei = self.vrambank[mapbase + mapoff];
+            let tilei = self.vrambank[mapbase + mapoff];
             // bg_tiles[loop_c] = tilei;
             // tiledata = 0 => tilei is a signed byte, so fix it here
-            let tilebase = self.add_tilei(tilebase, tilei);
+            let tilebase = tilei%192;//self.add_tilei(tilebase, tilei);
             // println!("tilebase: {}", tilebase);
 
             let row;
@@ -586,7 +570,7 @@ impl Gpu {
                 // To indicate bg priority, list a color >= 4
                 scanline[i as usize] = if bgpri {4} else {colori};
 
-                self.set_pixel_index(coff, colori as usize, &bgp);
+                set_pixel_index(&mut self.image_data, coff, colori as usize, &bgp);
 
                 x += 1;
                 i += 1;
@@ -602,12 +586,93 @@ impl Gpu {
         // println!("LINE: {:03} | LY: {:03} | {:?}", line, self.ly, bg_tiles);
     }
 
-    fn render_window(&mut self) {
-
+    fn render_window(&mut self, scanline: &mut [u8; WIDTH]) {
+        // TODO: Window rendering
     }
 
-    fn render_sprites(&mut self) {
+    fn render_sprites(&mut self, scanline: &mut [u8; WIDTH]) {
+        let line = self.ly as i32;
+        let ysize = if self.objsize {16} else {8};
 
+        // All sprits are located in OAM
+        // There are 40 sprites in total, each is 4 bytes wide
+        for sprite in self.oam.chunks(4) {
+            let mut yoff = (sprite[0] as i32) - 16;
+            let xoff = (sprite[1] as i32) - 8;
+            let mut tile = sprite[2] as usize;
+            let flags = sprite[3];
+
+            // First make sure that this sprite even lands on the current line
+            // being rendered. The y value in the sprite is the top left corner,
+            // so if that is below the scanline or the bottom of the sprite
+            // (which is 8 pixels high) lands below the scanline, this sprite
+            // doesn't need to be rendered right now
+            if yoff > line || yoff + ysize <= line ||
+               xoff <= -8 || xoff >= WIDTH as i32 {
+               continue
+            }
+
+            // 8x16 tiles always use adjacent tile indices. If we're in 8x16
+            // mode and this sprite needs the second tile, add 1 to the tile
+            // index and change yoff so it looks like we're rendering that tile
+            if ysize == 16 {
+                tile &= 0xfe; // ignore the lowest bit
+                if line - yoff >= 8 {
+                    tile |= 1;
+                    yoff += 8;
+                }
+            }
+
+            // 160px/line, 4 entries/px
+            let mut coff = (WIDTH as i32 * line + xoff) * 4;
+
+            // All sprite tile palettes are at 0x8000-0x8fff => start of vram.
+            // If we're in CGB mode, then we get our palette from the spite
+            // flags. We also need to take into account the tile being in a
+            // different bank. Otherwise, we just use the tile index as a raw
+            // index.
+            // bit4 is the palette number. 0 = obp0, 1 = obp1
+           let pal = if flags & 0x10 != 0 {self.pal.obp1} else {self.pal.obp0};
+           let tiled = self.tiles.data[tile as usize];
+
+
+            // bit6 is the vertical flip bit
+            let row = if flags & 0x40 != 0 {
+                tiled[(7 - (line - yoff)) as usize]
+            } else {
+                tiled[(line - yoff) as usize]
+            };
+
+            for x in 0..8 {
+                coff += 4;
+
+                // If these pixels are off screen, don't bother drawing
+                // anything. Also, if the background tile at this pixel has
+                // priority, don't render this sprite at all.
+                if xoff + x < 0 || xoff + x >= WIDTH as i32 ||
+                   scanline[(x + xoff) as usize] > 3 {
+                    continue
+                }
+                // bit5 is the horizontal flip flag
+                let colori = row[if flags & 0x20 != 0 {7-x} else {x} as usize];
+
+                // A color index of 0 for sprites means transparent
+                if colori == 0 { continue }
+
+                // bit7 0=OBJ Above BG, 1=OBJ Behind BG color 1-3. So if this
+                // sprite has this flag set and the data at this location
+                // already contains data (nonzero), then don't render this
+                // sprite
+                if flags & 0x80 != 0 && scanline[(xoff + x) as usize] != 0 {
+                    continue
+                }
+
+                let color = pal[colori as usize];
+
+                let palette = if flags & 0x10 != 0 {self.pal.obp0} else {self.pal.obp1};
+                set_pixel_index(&mut self.image_data, coff as usize - 4, colori as usize, &palette);
+            }
+        }
     }
 
     pub fn dump_tiles(&self) {
@@ -639,6 +704,25 @@ impl Gpu {
         img.save("tile_dump.png").unwrap();
         info!("Tiles dumped to tile_dump.png");
     }
+}
+
+
+#[inline]
+fn set_pixel(image_data: &mut ScreenData, x: usize, y: usize, r: u8, g: u8, b: u8) {
+    let first_byte = 4 * (x + (y * 160)) as usize;
+
+    image_data[first_byte] = r;      // R
+    image_data[first_byte+1] = g;    // G
+    image_data[first_byte+2] = b;    // B
+    image_data[first_byte+3] = 255;  // A
+}
+
+#[inline]
+fn set_pixel_index(image_data: &mut ScreenData, first_byte: usize, colori: usize, pal: &Palette) {
+    image_data[first_byte] = pal[colori][0];    // R
+    image_data[first_byte+1] = pal[colori][1];  // G
+    image_data[first_byte+2] = pal[colori][2];  // B
+    image_data[first_byte+3] = pal[colori][0];  // A
 }
 
 // Update the cached palettes for BG/OBP0/OBP1. This should be called whenever
